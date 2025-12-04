@@ -1,0 +1,5 @@
+{
+  "name": "Campus Animal Persona Quiz",
+  "description": "A fun animal persona quiz for students to discover their living habits. Results are automatically synced to the cloud for teacher analysis.",
+  "requestFramePermissions": []
+}
