@@ -2,36 +2,6 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AnimalType, QuizAnswer, StudentProfile, RoomGroup } from "../types";
 import { ANIMAL_DETAILS } from "../constants";
 
-// Initialize Gemini
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-// Schema for the bulk grouping response
-const groupingSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    groups: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          roomId: { type: Type.STRING },
-          studentIds: { 
-            type: Type.ARRAY, 
-            items: { type: Type.STRING },
-            description: "The IDs of students assigned to this room"
-          },
-          compatibilityScore: { type: Type.NUMBER, description: "0-100 score" },
-          reason: { type: Type.STRING, description: "Why these students were grouped together" },
-          potentialConflicts: { type: Type.STRING, description: "What they might argue about" },
-        },
-        required: ["roomId", "studentIds", "compatibilityScore", "reason", "potentialConflicts"],
-      },
-    },
-  },
-  required: ["groups"],
-};
-
-
 // --- Service Functions ---
 
 /**
@@ -148,6 +118,38 @@ export const analyzeStudentProfile = async (name: string, answers: QuizAnswer[])
  * Takes a list of student profiles and groups them into rooms.
  */
 export const generateRoomGroups = async (students: StudentProfile[]): Promise<RoomGroup[]> => {
+  // Initialize Gemini ONLY when needed, to prevent crash on load if key is missing
+  if (!process.env.API_KEY) {
+      throw new Error("請先設定 Google Gemini API Key (API_KEY)");
+  }
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  // Schema for the bulk grouping response
+  const groupingSchema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+        groups: {
+        type: Type.ARRAY,
+        items: {
+            type: Type.OBJECT,
+            properties: {
+            roomId: { type: Type.STRING },
+            studentIds: { 
+                type: Type.ARRAY, 
+                items: { type: Type.STRING },
+                description: "The IDs of students assigned to this room"
+            },
+            compatibilityScore: { type: Type.NUMBER, description: "0-100 score" },
+            reason: { type: Type.STRING, description: "Why these students were grouped together" },
+            potentialConflicts: { type: Type.STRING, description: "What they might argue about" },
+            },
+            required: ["roomId", "studentIds", "compatibilityScore", "reason", "potentialConflicts"],
+        },
+        },
+    },
+    required: ["groups"],
+  };
+
   // We need to keep the payload efficient.
   const rosterData = students.map(s => ({
     id: s.id,
