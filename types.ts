@@ -13,7 +13,7 @@ export interface QuizAnswer {
   questionId: number;
   answerValue: number; // 1-5 scale usually
   answerText: string;
-  extraText?: string; // For typed inputs (e.g. roommate name)
+  extraText?: string; // For typed inputs (comma separated for multiple names)
 }
 
 export interface QuizOption {
@@ -35,7 +35,7 @@ export interface StudentProfile {
   animalName: string; // Display name e.g., "夜貓子貓頭鷹"
   description: string; // New: Personality analysis text
   traits: string[];
-  preferredRoommate?: string; // New: Stores "Alice" or "None"
+  preferredRoommates: string[]; // CHANGED: Now an array of strings
   habits: {
     sleepTime: string;
     cleanliness: number; // 1-10

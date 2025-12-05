@@ -38,9 +38,13 @@ const StudentDetailModal: React.FC<Props> = ({ student, allStudents, onClose }) 
            <div className="space-y-4">
              <div className="bg-white/60 p-4 rounded-xl">
                <h4 className="font-bold text-gray-700 mb-2 text-sm">指定室友</h4>
-               <p className="text-blue-600 font-bold">
-                 {student.preferredRoommate === "無 (隨緣)" ? "隨緣" : student.preferredRoommate}
-               </p>
+               <div className="flex flex-wrap gap-1">
+                   {student.preferredRoommates?.map((n, i) => (
+                       <span key={i} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold">
+                           {n}
+                       </span>
+                   ))}
+               </div>
              </div>
              
              <div className="bg-white/60 p-4 rounded-xl">

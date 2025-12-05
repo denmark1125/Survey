@@ -34,8 +34,13 @@ const Dashboard: React.FC = () => {
       const owls = students.filter(s => s.animalType === AnimalType.OWL).length;
       const larks = students.filter(s => s.animalType === AnimalType.LARK).length;
       
-      const stayRequest = students.filter(s => s.preferredRoommate?.includes('續住') || s.preferredRoommate?.includes('不')).length;
-      const designated = students.filter(s => s.preferredRoommate && !s.preferredRoommate.includes('隨緣') && !s.preferredRoommate.includes('續住')).length;
+      // Calculate based on the array
+      const stayRequest = students.filter(s => s.preferredRoommates?.some(r => r.includes('續住') || r.includes('不'))).length;
+      
+      const designated = students.filter(s => {
+          const prefs = s.preferredRoommates || [];
+          return prefs.length > 0 && !prefs.includes('隨緣') && !prefs.some(r => r.includes('續住'));
+      }).length;
       
       const avgClean = Math.round(students.reduce((acc, s) => acc + (s.habits?.cleanliness || 5), 0) / total * 10) / 10;
 
@@ -57,8 +62,11 @@ const Dashboard: React.FC = () => {
   // --- Filtering Logic ---
   const filteredStudents = useMemo(() => {
       switch (filterTab) {
-          case 'STAY': return students.filter(s => s.preferredRoommate?.includes('續住') || s.preferredRoommate?.includes('不'));
-          case 'DESIGNATED': return students.filter(s => s.preferredRoommate && !s.preferredRoommate.includes('隨緣') && !s.preferredRoommate.includes('續住'));
+          case 'STAY': return students.filter(s => s.preferredRoommates?.some(r => r.includes('續住') || r.includes('不')));
+          case 'DESIGNATED': return students.filter(s => {
+              const prefs = s.preferredRoommates || [];
+              return prefs.length > 0 && !prefs.includes('隨緣') && !prefs.some(r => r.includes('續住'));
+          });
           case 'MISSING': return []; // Handled separately in UI
           default: return students;
       }
@@ -435,9 +443,9 @@ const Dashboard: React.FC = () => {
                         <div className="flex-grow min-w-0">
                             <div className="flex justify-between items-center mb-0.5">
                                 <div className="font-bold text-gray-800 text-sm">{s.name}</div>
-                                {s.preferredRoommate && s.preferredRoommate !== "無 (隨緣)" && (
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${s.preferredRoommate.includes('不') ? 'bg-orange-100 text-orange-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                                        {s.preferredRoommate.includes('不') ? '續住' : '指定'}
+                                {s.preferredRoommates && s.preferredRoommates.some(r => r !== "無 (隨緣)") && (
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${s.preferredRoommates.some(r => r.includes('不')) ? 'bg-orange-100 text-orange-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                        {s.preferredRoommates.some(r => r.includes('不')) ? '續住' : `指定(${s.preferredRoommates.length})`}
                                     </span>
                                 )}
                             </div>

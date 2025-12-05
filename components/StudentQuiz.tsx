@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { QUIZ_QUESTIONS } from '../constants';
 import { QuizAnswer } from '../types';
-import { Loader2, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Loader2, ArrowRight, ArrowLeft, CheckCircle2, Plus, Trash2, Users } from 'lucide-react';
 
 interface Props {
   onComplete: (name: string, answers: QuizAnswer[]) => void;
@@ -12,7 +12,9 @@ const StudentQuiz: React.FC<Props> = ({ onComplete, isLoading }) => {
   const [currentStep, setCurrentStep] = useState(-1); // -1 is Name input
   const [name, setName] = useState('');
   const [answers, setAnswers] = useState<QuizAnswer[]>([]);
-  const [extraInput, setExtraInput] = useState(''); // Text input for Q11
+  
+  // State for multiple roommate inputs
+  const [roommateInputs, setRoommateInputs] = useState<string[]>(['']); 
 
   const handleStart = () => {
     if (name.trim()) setCurrentStep(0);
@@ -21,8 +23,10 @@ const StudentQuiz: React.FC<Props> = ({ onComplete, isLoading }) => {
   const handleOptionSelect = (val: number, text: string, hasInput?: boolean) => {
     const currentQId = QUIZ_QUESTIONS[currentStep].id;
     
-    // Clear extra input if switching options
-    if (!hasInput) setExtraInput('');
+    // Reset inputs if switching to "Yes" option for the first time or switching away
+    if (!hasInput) {
+        setRoommateInputs(['']); 
+    }
 
     setAnswers(prev => {
       // Remove any existing answer for this question
@@ -31,25 +35,44 @@ const StudentQuiz: React.FC<Props> = ({ onComplete, isLoading }) => {
           questionId: currentQId, 
           answerValue: val, 
           answerText: text,
-          extraText: hasInput ? extraInput : undefined 
+          extraText: undefined // Will be populated by effect or next render cycle logic
       }];
     });
   };
 
-  const handleExtraInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value;
-      setExtraInput(val);
-      
-      const currentQId = QUIZ_QUESTIONS[currentStep].id;
-      setAnswers(prev => {
-          return prev.map(a => {
-              if (a.questionId === currentQId) {
-                  return { ...a, extraText: val };
-              }
-              return a;
-          });
-      });
+  // Manage Dynamic Roommate Inputs
+  const handleRoommateChange = (idx: number, val: string) => {
+      const newInputs = [...roommateInputs];
+      newInputs[idx] = val;
+      setRoommateInputs(newInputs);
   };
+
+  const addRoommateField = () => {
+      if (roommateInputs.length < 3) {
+          setRoommateInputs([...roommateInputs, '']);
+      }
+  };
+
+  const removeRoommateField = (idx: number) => {
+      const newInputs = roommateInputs.filter((_, i) => i !== idx);
+      setRoommateInputs(newInputs.length ? newInputs : ['']); // Keep at least one
+  };
+
+  // Sync Roommate Inputs to Answers
+  useEffect(() => {
+    const currentQId = QUIZ_QUESTIONS[currentStep]?.id;
+    if (currentQId === 11) { // Hardcoded check for Q11 logic
+        const currentAns = answers.find(a => a.questionId === 11);
+        if (currentAns?.answerValue === 2) { // "Yes" selected
+            const validNames = roommateInputs.map(n => n.trim()).filter(n => n.length > 0);
+            const extraText = validNames.join(','); // Store as comma separated string
+            
+            setAnswers(prev => prev.map(a => 
+                a.questionId === 11 ? { ...a, extraText } : a
+            ));
+        }
+    }
+  }, [roommateInputs, currentStep, answers]);
 
   const handleNext = () => {
     if (currentStep < QUIZ_QUESTIONS.length - 1) {
@@ -129,9 +152,14 @@ const StudentQuiz: React.FC<Props> = ({ onComplete, isLoading }) => {
   const isLastQuestion = currentStep === QUIZ_QUESTIONS.length - 1;
   
   const selectedOption = question.options.find(o => o.value === currentSelection?.answerValue);
-  const isInputRequired = selectedOption?.hasInput;
-  const isInputValid = !isInputRequired || (currentSelection?.extraText && currentSelection.extraText.trim().length > 0);
-  const canProceed = currentSelection && isInputValid;
+  
+  // Custom Validation for Q11
+  let canProceed = !!currentSelection;
+  if (selectedOption?.hasInput) {
+      // Must have at least one valid name entered
+      const validInputs = roommateInputs.some(n => n.trim().length > 0);
+      canProceed = validInputs;
+  }
 
   return (
     <div className="max-w-xl mx-auto">
@@ -174,17 +202,49 @@ const StudentQuiz: React.FC<Props> = ({ onComplete, isLoading }) => {
                     </div>
                     </button>
                     
-                    {/* Inline Text Input for Option */}
+                    {/* Multiple Inputs UI for Q11 */}
                     {isSelected && opt.hasInput && (
-                        <div className="mt-3 ml-4 animate-in fade-in slide-in-from-top-2">
-                             <input 
-                                type="text"
-                                placeholder="請輸入對方的名字..."
-                                value={extraInput}
-                                onChange={handleExtraInputChange}
-                                autoFocus
-                                className="w-full p-4 border-2 border-teal-200 rounded-2xl focus:border-teal-500 outline-none text-gray-800 font-bold bg-white shadow-inner text-lg"
-                             />
+                        <div className="mt-4 ml-2 mr-2 p-4 bg-white/60 rounded-2xl border border-teal-100 animate-in fade-in slide-in-from-top-2">
+                             <div className="text-xs text-teal-600 font-bold mb-3 flex items-center gap-1">
+                                <Users size={12}/> 請輸入想住的同學全名 (最多3位)
+                             </div>
+                             
+                             <div className="space-y-3">
+                                 {roommateInputs.map((inputVal, idx) => (
+                                     <div key={idx} className="flex gap-2">
+                                         <input 
+                                            type="text"
+                                            placeholder={`室友姓名 ${idx + 1}`}
+                                            value={inputVal}
+                                            onChange={(e) => handleRoommateChange(idx, e.target.value)}
+                                            autoFocus={idx === roommateInputs.length - 1}
+                                            className="flex-1 p-3 border-2 border-teal-200 rounded-xl focus:border-teal-500 outline-none text-gray-800 font-bold bg-white shadow-sm text-base"
+                                         />
+                                         {roommateInputs.length > 1 && (
+                                            <button 
+                                                onClick={() => removeRoommateField(idx)}
+                                                className="p-3 text-red-400 hover:bg-red-50 rounded-xl transition-colors"
+                                                title="刪除"
+                                            >
+                                                <Trash2 size={20} />
+                                            </button>
+                                         )}
+                                     </div>
+                                 ))}
+                             </div>
+
+                             {roommateInputs.length < 3 && (
+                                 <button 
+                                    onClick={addRoommateField}
+                                    className="mt-3 w-full py-2 border-2 border-dashed border-teal-300 text-teal-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-teal-50 transition-colors text-sm"
+                                 >
+                                    <Plus size={16} /> 新增一位
+                                 </button>
+                             )}
+                             
+                             <div className="text-[10px] text-orange-400 mt-2 font-medium">
+                                 * 請務必輸入「全名」以利系統配對
+                             </div>
                         </div>
                     )}
                 </div>

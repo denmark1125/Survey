@@ -12,7 +12,7 @@ const Login: React.FC<Props> = ({ onLogin, onBack }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === '8888') { // Default password
+    if (password === '0723') { // Updated password
       onLogin();
     } else {
       setError(true);

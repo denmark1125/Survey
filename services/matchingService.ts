@@ -65,7 +65,7 @@ export const calculateCompatibility = (s1: StudentProfile, s2: StudentProfile): 
   }
 
   // Bonus: Designated Roommate
-  if (s1.preferredRoommate === s2.name || s2.preferredRoommate === s1.name) {
+  if (s1.preferredRoommates?.includes(s2.name) || s2.preferredRoommates?.includes(s1.name)) {
     score = 100; // Override
     details.push("✨ 雙方指定室友");
   }

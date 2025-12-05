@@ -78,7 +78,7 @@ export const exportDashboardToExcel = (students: StudentProfile[], groups: RoomG
   const overviewData = students.map(s => ({
     "姓名": s.name,
     "測驗結果": s.animalName,
-    "指定室友": s.preferredRoommate || '',
+    "指定室友": s.preferredRoommates ? s.preferredRoommates.join(", ") : '',
     "作息(睡覺)": s.habits.sleepTime,
     "整潔度(1-10)": s.habits.cleanliness,
     "社交能量(1-10)": s.habits.socialEnergy,
@@ -132,7 +132,9 @@ export const exportDashboardToExcel = (students: StudentProfile[], groups: RoomG
       });
       
       // Fill Q11 explicitly if missing (legacy data)
-      if (!row['Q11']) row['Q11'] = s.preferredRoommate;
+      if (!row['Q11']) {
+        row['Q11'] = s.preferredRoommates ? s.preferredRoommates.join(", ") : '';
+      }
 
       return row;
   });

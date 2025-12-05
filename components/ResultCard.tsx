@@ -100,10 +100,13 @@ const ResultCard: React.FC<Props> = ({ profile, onRestart }) => {
         </div>
 
         {/* Header Section */}
-        <div className={`${details.color.replace('text-', 'bg-').replace('100', '50')} pt-10 pb-6 text-center relative`}>
+        {/* FIX: Correctly extract background class without polluting it with text colors */}
+        <div className={`${details.color.split(' ')[0].replace('100', '50')} pt-10 pb-6 text-center relative`}>
           <div className="w-40 h-40 mx-auto mb-4 drop-shadow-xl transform hover:scale-105 transition-transform duration-500">
             {details.svg}
           </div>
+          {/* Added English Label for visual consistency with exported image */}
+          <div className="text-sm font-bold opacity-50 font-serif italic mb-1">{details.englishLabel}</div>
           <h2 className="text-3xl font-black mb-1 tracking-tight text-gray-800">{profile.animalName}</h2>
           <div className="flex justify-center gap-2 mb-2">
             {profile.traits.slice(0, 2).map((t, i) => (
@@ -156,12 +159,15 @@ const ResultCard: React.FC<Props> = ({ profile, onRestart }) => {
               </div>
           </div>
 
-          {/* Roommate Preference (Subtle) */}
-          {profile.preferredRoommate && profile.preferredRoommate !== "無 (隨緣)" && (
-            <div className="text-center">
-                 <span className="text-[10px] bg-indigo-50 text-indigo-400 px-3 py-1 rounded-full font-bold">
-                    指定室友/狀態：{profile.preferredRoommate}
-                 </span>
+          {/* Roommate Preference (Subtle) - Display Array as Tags */}
+          {/* NOTE: This is visible on the web card for the student to confirm, but EXCLUDED from the image export below */}
+          {profile.preferredRoommates && profile.preferredRoommates.some(r => r !== "無 (隨緣)") && (
+            <div className="text-center flex flex-wrap justify-center gap-2">
+                 {profile.preferredRoommates.map((name, i) => (
+                     <span key={i} className="text-[10px] bg-indigo-50 text-indigo-400 px-3 py-1 rounded-full font-bold">
+                        {name.includes('不') ? '想續住' : `想跟 ${name} 住`}
+                     </span>
+                 ))}
             </div>
           )}
 
@@ -203,7 +209,7 @@ const ResultCard: React.FC<Props> = ({ profile, onRestart }) => {
          <div className="w-full h-full relative flex flex-col pt-[150px] px-12 items-center">
             
             {/* Background Decor */}
-            <div className={`absolute top-0 left-0 w-full h-[850px] ${details.color.replace('text-', 'bg-').replace('100', '100')} rounded-b-[150px] z-0 opacity-40`}></div>
+            <div className={`absolute top-0 left-0 w-full h-[850px] ${details.color.split(' ')[0]} rounded-b-[150px] z-0 opacity-40`}></div>
             
             {/* Title */}
             <div className="relative z-10 text-center mb-10">

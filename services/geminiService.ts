@@ -30,11 +30,18 @@ export const analyzeStudentProfile = async (name: string, answers: QuizAnswer[])
   
   const prefAns = getAns(11);
   
-  let preferredRoommate = "無 (隨緣)";
+  // Parse Preferred Roommates (Array)
+  let preferredRoommates: string[] = [];
+  
   if (prefAns?.answerValue === 2 && prefAns.extraText) {
-      preferredRoommate = prefAns.extraText; // User typed a name
+      // Split comma separated names, trim whitespace, remove empty
+      preferredRoommates = prefAns.extraText.split(',')
+          .map(n => n.trim())
+          .filter(n => n.length > 0);
   } else if (prefAns?.answerValue === 3) {
-      preferredRoommate = "不想換宿舍 (續住)";
+      preferredRoommates = ["不想換宿舍 (續住)"];
+  } else {
+      preferredRoommates = ["無 (隨緣)"];
   }
 
   let type: AnimalType = AnimalType.KOALA;
@@ -114,7 +121,7 @@ export const analyzeStudentProfile = async (name: string, answers: QuizAnswer[])
     animalName: ANIMAL_DETAILS[type].label,
     description: ANIMAL_DETAILS[type].description,
     traits: traits,
-    preferredRoommate: preferredRoommate,
+    preferredRoommates: preferredRoommates,
     habits: {
       sleepTime: sleepStr,
       cleanliness: cleanMetric,
@@ -165,7 +172,7 @@ export const generateRoomGroups = async (students: StudentProfile[]): Promise<Ro
     id: s.id,
     name: s.name,
     animal: s.animalName,
-    preferredRoommate: s.preferredRoommate,
+    preferredRoommates: s.preferredRoommates,
     traits: s.traits, 
     habits: s.habits
   }));
@@ -176,7 +183,7 @@ export const generateRoomGroups = async (students: StudentProfile[]): Promise<Ro
     Group them into optimal rooms of 3 to 4 people (prioritize 4).
     
     Rules for grouping:
-    1. **CRITICAL**: Check 'preferredRoommate'. If Student A wants Student B, put them in the same room if possible.
+    1. **CRITICAL**: Check 'preferredRoommates'. If Student A wants Student B, put them in the same room if possible.
     2. Sleep schedules MUST match (Early birds with Early birds). This is the most critical physiological factor.
     3. Cleanliness levels should be similar.
     4. Social energy should be compatible (e.g. don't put one quiet person with 3 loud party animals).
@@ -228,7 +235,7 @@ export const generateMockStudents = async (count: number = 20): Promise<StudentP
             questionId: idx + 1, 
             answerValue: Math.floor(Math.random() * 3) + 1,
             answerText: "Mock",
-            extraText: undefined // Explicitly null/undefined
+            extraText: undefined 
         }));
         
         // Mock Q11 logic properly to test dashboard filters
