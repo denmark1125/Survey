@@ -75,10 +75,13 @@ const StudentQuiz: React.FC<Props> = ({ onComplete, isLoading }) => {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-center">
-        <Loader2 className="w-16 h-16 text-teal-600 animate-spin mb-6" />
-        <h3 className="text-2xl font-bold text-gray-800">正在雲端儲存資料...</h3>
-        <p className="text-gray-500 mt-2">AI 正在分析你的生活習慣</p>
+      <div className="flex flex-col items-center justify-center h-80 text-center px-4">
+        <div className="relative">
+            <div className="w-20 h-20 border-4 border-gray-200 rounded-full animate-spin border-t-teal-500 mb-6"></div>
+            <div className="absolute inset-0 flex items-center justify-center font-bold text-xs text-teal-600">AI</div>
+        </div>
+        <h3 className="text-2xl font-bold text-gray-800 mb-2">正在分析你的靈魂...</h3>
+        <p className="text-gray-400">系統正在將你的資料安全地上傳至雲端</p>
       </div>
     );
   }
@@ -86,30 +89,31 @@ const StudentQuiz: React.FC<Props> = ({ onComplete, isLoading }) => {
   // Name Input Screen
   if (currentStep === -1) {
     return (
-      <div className="max-w-xl mx-auto mt-8">
-        <div className="bg-white p-8 md:p-12 rounded-3xl shadow-xl border-2 border-teal-100 text-center">
-          <div className="inline-block p-4 rounded-full bg-teal-50 mb-6">
-            <span className="text-4xl">👋</span>
+      <div className="max-w-xl mx-auto mt-12 px-4">
+        <div className="bg-white/80 backdrop-blur-sm p-10 md:p-14 rounded-[40px] shadow-2xl border border-white text-center relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-teal-400 to-emerald-400"></div>
+          
+          <div className="inline-block p-5 rounded-full bg-teal-50 mb-8 shadow-inner">
+            <span className="text-5xl">🎓</span>
           </div>
-          <h2 className="text-3xl font-extrabold text-teal-900 mb-2">校園動物系人格測驗</h2>
-          <p className="text-gray-500 mb-8">輸入你的名字，測出你的靈魂動物！</p>
+          <h2 className="text-4xl font-black text-gray-800 mb-3 tracking-tight">哈囉，同學！</h2>
+          <p className="text-gray-500 mb-10 text-lg font-medium">輸入你的名字，開始探索你的宿舍人格</p>
           
           <div className="space-y-6">
-            <div className="relative">
-              <label className="block text-left text-sm font-bold text-teal-700 mb-2 ml-1">姓名</label>
+            <div className="relative group">
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-6 py-5 text-xl font-bold text-gray-900 rounded-2xl border-4 border-teal-100 focus:border-teal-500 focus:ring-4 focus:ring-teal-100 transition-all outline-none placeholder-gray-300 bg-white"
-                placeholder="例：王小明"
+                className="w-full px-8 py-6 text-2xl font-bold text-center text-gray-800 rounded-3xl border-4 border-gray-100 focus:border-teal-400 focus:ring-4 focus:ring-teal-50 transition-all outline-none placeholder-gray-300 bg-gray-50/50 group-hover:bg-white"
+                placeholder="你的名字..."
               />
             </div>
             
             <button
               onClick={handleStart}
               disabled={!name.trim()}
-              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold text-xl py-5 px-6 rounded-2xl transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-lg shadow-teal-200 flex items-center justify-center gap-3"
+              className="w-full bg-gray-900 hover:bg-black text-white font-bold text-xl py-6 rounded-3xl transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed disabled:transform-none shadow-xl flex items-center justify-center gap-3"
             >
               開始測驗 <ArrowRight size={24} />
             </button>
@@ -123,8 +127,7 @@ const StudentQuiz: React.FC<Props> = ({ onComplete, isLoading }) => {
   const progress = ((currentStep + 1) / QUIZ_QUESTIONS.length) * 100;
   const currentSelection = getCurrentAnswer();
   const isLastQuestion = currentStep === QUIZ_QUESTIONS.length - 1;
-
-  // Validation: If selected option requires input, input must not be empty
+  
   const selectedOption = question.options.find(o => o.value === currentSelection?.answerValue);
   const isInputRequired = selectedOption?.hasInput;
   const isInputValid = !isInputRequired || (currentSelection?.extraText && currentSelection.extraText.trim().length > 0);
@@ -133,21 +136,20 @@ const StudentQuiz: React.FC<Props> = ({ onComplete, isLoading }) => {
   return (
     <div className="max-w-xl mx-auto">
       {/* Progress Bar */}
-      <div className="flex justify-between text-xs font-bold text-gray-400 mb-2 px-1">
-        <span>進度</span>
-        <span>{currentStep + 1} / {QUIZ_QUESTIONS.length}</span>
-      </div>
-      <div className="w-full bg-gray-200 rounded-full h-3 mb-8">
-        <div className="bg-teal-500 h-3 rounded-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(20,184,166,0.5)]" style={{ width: `${progress}%` }}></div>
+      <div className="mb-8 px-4">
+        <div className="flex justify-between text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">
+          <span>第 {currentStep + 1} 題</span>
+          <span>共 {QUIZ_QUESTIONS.length} 題</span>
+        </div>
+        <div className="w-full bg-white rounded-full h-4 p-1 shadow-sm">
+          <div className="bg-gradient-to-r from-teal-400 to-emerald-400 h-2 rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div>
+        </div>
       </div>
 
-      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-lg border border-teal-50 min-h-[500px] flex flex-col relative overflow-hidden">
-        {/* Decorative background element */}
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-teal-50 rounded-full opacity-50 z-0"></div>
-
-        <div className="relative z-10 flex-grow">
-          <h3 className="text-2xl font-bold text-gray-800 mb-8 leading-snug">
-            <span className="text-teal-500 mr-2 text-3xl align-bottom">Q{currentStep + 1}.</span>
+      <div className="bg-white/80 backdrop-blur-md p-6 md:p-10 rounded-[40px] shadow-xl border border-white min-h-[500px] flex flex-col relative">
+        
+        <div className="flex-grow">
+          <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mb-10 leading-snug">
             {question.text}
           </h3>
 
@@ -158,30 +160,30 @@ const StudentQuiz: React.FC<Props> = ({ onComplete, isLoading }) => {
                 <div key={opt.value}>
                     <button
                     onClick={() => handleOptionSelect(opt.value, opt.text, opt.hasInput)}
-                    className={`w-full text-left p-5 rounded-2xl border-2 transition-all duration-200 group relative ${
+                    className={`w-full text-left p-6 rounded-3xl border-2 transition-all duration-300 group relative ${
                         isSelected 
-                        ? 'border-teal-500 bg-teal-50 shadow-md' 
-                        : 'border-gray-100 hover:border-teal-300 hover:bg-gray-50'
+                        ? 'border-teal-500 bg-teal-50/50 shadow-md transform scale-[1.02]' 
+                        : 'border-transparent bg-gray-50 hover:bg-white hover:border-gray-200 hover:shadow-sm'
                     }`}
                     >
                     <div className="flex items-center justify-between">
-                        <span className={`font-medium text-lg ${isSelected ? 'text-teal-900' : 'text-gray-600'}`}>
+                        <span className={`font-bold text-lg ${isSelected ? 'text-teal-900' : 'text-gray-500'}`}>
                         {opt.text}
                         </span>
-                        {isSelected && <CheckCircle2 className="text-teal-500" size={24} />}
+                        {isSelected && <CheckCircle2 className="text-teal-500 fill-teal-100" size={28} />}
                     </div>
                     </button>
                     
                     {/* Inline Text Input for Option */}
                     {isSelected && opt.hasInput && (
-                        <div className="mt-2 ml-2 animate-in fade-in slide-in-from-top-2">
+                        <div className="mt-3 ml-4 animate-in fade-in slide-in-from-top-2">
                              <input 
                                 type="text"
                                 placeholder="請輸入對方的名字..."
                                 value={extraInput}
                                 onChange={handleExtraInputChange}
                                 autoFocus
-                                className="w-full p-3 border-2 border-teal-200 rounded-xl focus:border-teal-500 outline-none text-gray-700 bg-white"
+                                className="w-full p-4 border-2 border-teal-200 rounded-2xl focus:border-teal-500 outline-none text-gray-800 font-bold bg-white shadow-inner text-lg"
                              />
                         </div>
                     )}
@@ -192,27 +194,27 @@ const StudentQuiz: React.FC<Props> = ({ onComplete, isLoading }) => {
         </div>
 
         {/* Navigation Buttons */}
-        <div className="relative z-10 flex gap-4 mt-8 pt-6 border-t border-gray-100">
+        <div className="relative z-10 flex gap-4 mt-12 pt-8 border-t border-gray-100">
           <button
             onClick={handlePrevious}
             disabled={currentStep === 0}
-            className={`flex-1 py-4 rounded-xl font-bold text-gray-600 flex items-center justify-center gap-2 transition-colors ${
-              currentStep === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100'
+            className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
+              currentStep === 0 ? 'opacity-0 cursor-not-allowed' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
             }`}
           >
-            <ArrowLeft size={20} /> 上一題
+            <ArrowLeft size={24} />
           </button>
           
           <button
             onClick={handleNext}
             disabled={!canProceed}
-            className={`flex-[2] py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all shadow-lg ${
+            className={`flex-1 py-4 rounded-2xl font-bold text-white flex items-center justify-center gap-2 transition-all shadow-lg text-lg ${
               !canProceed 
-                ? 'bg-gray-300 cursor-not-allowed shadow-none' 
-                : 'bg-teal-600 hover:bg-teal-700 shadow-teal-200 hover:scale-[1.02]'
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' 
+                : 'bg-teal-600 hover:bg-teal-700 shadow-teal-200 hover:scale-[1.02] active:scale-[0.98]'
             }`}
           >
-            {isLastQuestion ? '提交並查看結果' : '下一題'} <ArrowRight size={20} />
+            {isLastQuestion ? '查看結果' : '下一題'} <ArrowRight size={24} />
           </button>
         </div>
       </div>

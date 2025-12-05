@@ -3,13 +3,12 @@ import { getFirestore, Firestore } from 'firebase/firestore';
 
 // 您的 Firebase 設定檔
 const firebaseConfig = {
-  apiKey: "AIzaSyCO3-WI-gD72w81WbK8yCUgkLH7-vHj5BE",
-  authDomain: "survey-for-dorm.firebaseapp.com",
-  projectId: "survey-for-dorm",
-  storageBucket: "survey-for-dorm.firebasestorage.app",
-  messagingSenderId: "265334968846",
-  appId: "1:265334968846:web:9a8343cacfc62a1e81225f",
-  measurementId: "G-Z85BDDK33M"
+  apiKey: "AIzaSyACoDpGMa8ZeziqampkfqOxFGdY3yqxcCQ",
+  authDomain: "carldormy.firebaseapp.com",
+  projectId: "carldormy",
+  storageBucket: "carldormy.firebasestorage.app",
+  messagingSenderId: "1027316600374",
+  appId: "1:1027316600374:web:3a42f41a5b4b135545d297"
 };
 
 // Initialize Firebase

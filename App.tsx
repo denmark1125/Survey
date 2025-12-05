@@ -5,7 +5,7 @@ import ResultCard from './components/ResultCard';
 import Dashboard from './components/Dashboard';
 import { analyzeStudentProfile } from './services/geminiService';
 import { saveStudentResult } from './services/dbService';
-import { GraduationCap, User, PawPrint } from 'lucide-react';
+import { GraduationCap, User, Sparkles } from 'lucide-react';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('LANDING');
@@ -41,45 +41,46 @@ const App: React.FC = () => {
     switch (view) {
       case 'LANDING':
         return (
-          <div className="flex flex-col items-center justify-center min-h-[80vh] px-4">
-            <div className="bg-white p-8 rounded-3xl shadow-xl max-w-lg w-full text-center border-b-4 border-teal-500">
-              <div className="w-20 h-20 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-6 text-teal-600">
-                <PawPrint size={40} />
-              </div>
-              <h1 className="text-3xl font-extrabold text-gray-900 mb-2">校園動物系人格測驗</h1>
-              <p className="text-gray-500 mb-8">
-                這是一個有趣的心理測驗！透過回答生活習慣問題，找出你的「靈魂動物」，看看你在群體中是哪種角色！
-              </p>
+          <div className="flex flex-col items-center justify-center min-h-[90vh] px-4">
+            <div className="bg-white/90 backdrop-blur-xl p-10 rounded-[48px] shadow-2xl max-w-lg w-full text-center border-4 border-white relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-teal-50 to-transparent z-0"></div>
               
-              <div className="grid gap-4">
-                <button
-                  onClick={() => setView('QUIZ')}
-                  className="flex items-center justify-center gap-3 w-full py-4 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-lg transition-transform hover:scale-[1.02] shadow-lg shadow-teal-200"
-                >
-                  <User size={24} />
-                  開始測驗
-                </button>
-                <div className="relative my-2">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
-                  <div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-gray-500">老師專區</span></div>
+              <div className="relative z-10">
+                <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mx-auto mb-8 shadow-lg text-teal-500 border-4 border-teal-50">
+                    <Sparkles size={48} />
                 </div>
-                <button
-                  onClick={() => setView('TEACHER_DASHBOARD')}
-                  className="flex items-center justify-center gap-3 w-full py-4 bg-white border-2 border-gray-200 hover:border-gray-800 text-gray-800 rounded-xl font-bold text-lg transition-colors"
-                >
-                  <GraduationCap size={24} />
-                  管理後台
-                </button>
+                <h1 className="text-4xl font-black text-gray-800 mb-4 tracking-tight leading-tight">校園動物系<br/>人格測驗</h1>
+                <p className="text-gray-500 mb-10 leading-relaxed font-medium">
+                    你是早起的雲雀？還是夜行的貓頭鷹？<br/>
+                    花 2 分鐘，測出你隱藏的宿舍靈魂動物！
+                </p>
+                
+                <div className="grid gap-5">
+                    <button
+                    onClick={() => setView('QUIZ')}
+                    className="flex items-center justify-center gap-3 w-full py-5 bg-teal-600 hover:bg-teal-700 text-white rounded-2xl font-bold text-xl transition-all hover:scale-[1.02] shadow-xl shadow-teal-200"
+                    >
+                    <User size={24} />
+                    開始測驗
+                    </button>
+                    
+                    <button
+                    onClick={() => setView('TEACHER_DASHBOARD')}
+                    className="flex items-center justify-center gap-3 w-full py-5 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-2xl font-bold text-lg transition-colors"
+                    >
+                    <GraduationCap size={24} />
+                    老師專區
+                    </button>
+                </div>
               </div>
             </div>
-            <p className="mt-8 text-sm text-gray-400">Powered by Google Gemini AI</p>
           </div>
         );
         
       case 'QUIZ':
         return (
-          <div className="pt-10 px-4 pb-20">
-            <button onClick={() => setView('LANDING')} className="mb-4 text-gray-500 hover:text-teal-600 font-medium text-sm">
+          <div className="pt-8 px-4 pb-20 max-w-3xl mx-auto">
+            <button onClick={() => setView('LANDING')} className="mb-6 px-4 py-2 bg-white rounded-full text-gray-500 hover:text-teal-600 font-bold text-sm shadow-sm transition-all hover:shadow-md">
               &larr; 回首頁
             </button>
             <StudentQuiz onComplete={handleQuizComplete} isLoading={isLoading} />
@@ -88,8 +89,8 @@ const App: React.FC = () => {
 
       case 'RESULT':
         return (
-          <div className="pt-10 px-4 pb-20">
-             <button onClick={() => setView('LANDING')} className="mb-4 text-gray-500 hover:text-teal-600 font-medium text-sm">
+          <div className="pt-8 px-4 pb-20 max-w-3xl mx-auto">
+             <button onClick={() => setView('LANDING')} className="mb-6 px-4 py-2 bg-white rounded-full text-gray-500 hover:text-teal-600 font-bold text-sm shadow-sm transition-all hover:shadow-md">
               &larr; 回首頁
             </button>
             {currentProfile && <ResultCard profile={currentProfile} onRestart={handleRestart} />}
@@ -98,13 +99,7 @@ const App: React.FC = () => {
 
       case 'TEACHER_DASHBOARD':
         return (
-          <div className="min-h-screen">
-            <div className="bg-white border-b px-4 py-3 flex justify-between items-center sticky top-0 z-50">
-                <span className="font-bold text-xl text-teal-700">管理後台</span>
-                <button onClick={() => setView('LANDING')} className="text-sm text-gray-500 hover:text-gray-900">
-                    登出
-                </button>
-            </div>
+          <div className="min-h-screen pb-20">
             <Dashboard />
           </div>
         );
@@ -112,7 +107,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F0FDF4] font-sans text-gray-900">
+    <div className="min-h-screen bg-[#fdfbf7] font-sans text-gray-900 selection:bg-teal-200 selection:text-teal-900">
       {renderContent()}
     </div>
   );

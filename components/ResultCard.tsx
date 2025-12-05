@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { StudentProfile } from '../types';
+import { StudentProfile, AnimalType } from '../types';
 import { ANIMAL_DETAILS } from '../constants';
-import { RefreshCcw, Camera, CloudCheck } from 'lucide-react';
+import { RefreshCcw, Camera, CloudCheck, HeartHandshake, Sparkles } from 'lucide-react';
 import html2canvas from 'html2canvas';
 
 interface Props {
@@ -9,24 +9,54 @@ interface Props {
   onRestart: () => void;
 }
 
+// Simple logic to determine the best animal match for a roommate
+const getBestMatch = (type: AnimalType): AnimalType => {
+  switch (type) {
+    case AnimalType.OWL: return AnimalType.KOALA; // Owls need someone quiet like Koala
+    case AnimalType.LARK: return AnimalType.LARK; // Larks need other Larks (sync schedule)
+    case AnimalType.KOALA: return AnimalType.CAT; // Koala gets along with independent Cats
+    case AnimalType.PUPPY: return AnimalType.PEACOCK; // Puppy & Peacock = Fun House
+    case AnimalType.CAT: return AnimalType.LARK; // Cat likes the quiet of a Lark
+    case AnimalType.PEACOCK: return AnimalType.PUPPY; // Peacock needs audience
+    case AnimalType.HAMSTER: return AnimalType.HAMSTER; // Hamsters need warmth together
+    default: return AnimalType.KOALA;
+  }
+};
+
 const ResultCard: React.FC<Props> = ({ profile, onRestart }) => {
   const details = ANIMAL_DETAILS[profile.animalType];
+  const bestMatchType = getBestMatch(profile.animalType);
+  const bestMatchDetails = ANIMAL_DETAILS[bestMatchType];
+  
   const [isCapturing, setIsCapturing] = useState(false);
   const storyRef = useRef<HTMLDivElement>(null);
+
+  // Normalize scores for display (1-10)
+  const socialPercent = profile.habits.socialEnergy * 10;
+  const cleanPercent = profile.habits.cleanliness * 10;
 
   const handleDownloadStory = async () => {
     if (!storyRef.current) return;
     setIsCapturing(true);
+
+    // Short timeout to ensure assets are ready (fonts, svgs)
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     try {
         const canvas = await html2canvas(storyRef.current, {
-            scale: 2, 
+            scale: 1, 
             backgroundColor: null,
-            useCORS: true
+            useCORS: true,
+            logging: false,
+            width: 1080,
+            height: 1920,
+            windowWidth: 1080,
+            windowHeight: 1920
         });
         
         const link = document.createElement('a');
-        link.download = `RoomieMatch_${profile.name}.jpg`;
-        link.href = canvas.toDataURL('image/jpeg', 0.9);
+        link.download = `AnimalPersona_${profile.name}.jpg`;
+        link.href = canvas.toDataURL('image/jpeg', 0.95);
         link.click();
     } catch (e) {
         console.error("Image generation failed", e);
@@ -36,112 +66,213 @@ const ResultCard: React.FC<Props> = ({ profile, onRestart }) => {
     }
   };
 
+  // Helper component for the Spectrum Slider (Rainbow Gradient)
+  const SpectrumSlider = ({ labelLeft, labelRight, percent, title }: { labelLeft: string, labelRight: string, percent: number, title: string }) => (
+      <div className="mb-6">
+          <div className="flex justify-between text-xs font-bold text-gray-500 mb-2 px-1">
+              <span>{labelLeft}</span>
+              <span className="text-gray-400 font-normal">{title}</span>
+              <span>{labelRight}</span>
+          </div>
+          <div className="relative h-3 bg-gray-100 rounded-full overflow-visible">
+              {/* Rainbow Gradient Background */}
+              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-sky-200 via-purple-200 to-rose-200 opacity-80"></div>
+              
+              {/* Simple Marker Dot */}
+              <div 
+                  className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-[0_0_0_3px_rgba(255,255,255,0.5),0_2px_4px_rgba(0,0,0,0.1)] transition-all duration-1000 ease-out z-10 flex items-center justify-center"
+                  style={{ left: `calc(${percent}% - 8px)` }}
+              >
+                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-full"></div>
+              </div>
+          </div>
+      </div>
+  );
+
   return (
     <div className="max-w-md mx-auto relative">
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden border-2 border-teal-100 relative z-10">
+      <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden border-4 border-white relative z-10 ring-1 ring-gray-100">
         
         {/* Data Saved Badge */}
-        <div className="bg-teal-600 text-white text-xs font-bold py-1 text-center flex items-center justify-center gap-1">
-            <CloudCheck size={14} /> 資料已自動上傳雲端
+        <div className="bg-emerald-500/90 backdrop-blur-sm text-white text-[10px] font-bold py-1.5 text-center flex items-center justify-center gap-1 uppercase tracking-widest">
+            <CloudCheck size={12} /> 資料已自動儲存
         </div>
 
-        <div className={`${details.color} p-8 text-center relative`}>
-          <div className="w-32 h-32 mx-auto mb-4 animate-bounce drop-shadow-md">
+        {/* Header Section */}
+        <div className={`${details.color.replace('text-', 'bg-').replace('100', '50')} pt-10 pb-6 text-center relative`}>
+          <div className="w-40 h-40 mx-auto mb-4 drop-shadow-xl transform hover:scale-105 transition-transform duration-500">
             {details.svg}
           </div>
-          <h2 className="text-3xl font-bold mb-1 tracking-tight">{profile.animalName}</h2>
-          <p className="opacity-80 font-medium tracking-widest uppercase text-sm">{profile.animalType}</p>
+          <h2 className="text-3xl font-black mb-1 tracking-tight text-gray-800">{profile.animalName}</h2>
+          <div className="flex justify-center gap-2 mb-2">
+            {profile.traits.slice(0, 2).map((t, i) => (
+                <span key={i} className="px-3 py-1 bg-white/60 rounded-full text-[10px] font-bold text-gray-600">
+                    #{t}
+                </span>
+            ))}
+          </div>
         </div>
 
-        <div className="p-8 space-y-6">
+        <div className="p-6 space-y-6">
           
-          {/* Psychological Analysis Section */}
-          <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100">
-            <h3 className="text-orange-800 font-bold mb-2 flex items-center gap-2">
-               ✨ 性格解析
-            </h3>
-            <p className="text-gray-700 text-sm leading-relaxed text-justify">
+          {/* Personality Description */}
+          <div className="text-gray-600 text-sm leading-6 text-justify font-medium px-2">
               {profile.description}
-            </p>
           </div>
 
-          {/* Roommate Preference Display */}
+          {/* New Stats Sliders */}
+          <div className="bg-stone-50/50 p-5 rounded-3xl border border-stone-100">
+             <SpectrumSlider 
+                title="社交能量"
+                labelLeft="安靜獨處"
+                labelRight="熱鬧聚會"
+                percent={socialPercent}
+             />
+             <SpectrumSlider 
+                title="生活習慣"
+                labelLeft="隨性自在"
+                labelRight="一塵不染"
+                percent={cleanPercent}
+             />
+          </div>
+
+          {/* Best Match Section */}
+          <div className="bg-gradient-to-br from-white to-pink-50 p-4 rounded-3xl border border-pink-100 flex items-center justify-between shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-20 h-20 bg-pink-100 rounded-full blur-2xl opacity-50 -mr-10 -mt-10"></div>
+              <div className="pl-2 relative z-10">
+                  <div className="text-[10px] font-bold text-pink-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                      <Sparkles size={12}/> 最佳拍檔
+                  </div>
+                  <div className="font-bold text-gray-700 text-lg">
+                      {bestMatchDetails.label}
+                  </div>
+                  <div className="text-[10px] text-gray-500">
+                      靈魂最契合的動物朋友
+                  </div>
+              </div>
+              <div className="w-16 h-16 bg-white rounded-full p-2 shadow-sm border-2 border-white relative z-10">
+                  {bestMatchDetails.svg}
+              </div>
+          </div>
+
+          {/* Roommate Preference (Subtle) */}
           {profile.preferredRoommate && profile.preferredRoommate !== "無 (隨緣)" && (
-            <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center">
-                 <p className="text-xs text-blue-600 mb-1 font-bold">已登記指定室友</p>
-                 <p className="font-bold text-blue-900">{profile.preferredRoommate}</p>
+            <div className="text-center">
+                 <span className="text-[10px] bg-indigo-50 text-indigo-400 px-3 py-1 rounded-full font-bold">
+                    指定室友/狀態：{profile.preferredRoommate}
+                 </span>
             </div>
           )}
 
-          {/* Tags */}
-          <div>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">關鍵特質</h3>
-            <div className="flex flex-wrap gap-2">
-              {profile.traits.map((t, i) => (
-                <span key={i} className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-semibold">
-                  #{t}
-                </span>
-              ))}
-            </div>
-          </div>
-
           {/* Actions */}
-          <div className="pt-6 border-t border-gray-100 space-y-3">
-            
+          <div className="pt-2">
             <button
                 onClick={handleDownloadStory}
                 disabled={isCapturing}
-                className="w-full py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all bg-gradient-to-r from-pink-500 to-orange-400 text-white shadow-lg hover:shadow-orange-200 hover:scale-[1.02]"
+                className="w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all bg-gray-900 text-white shadow-xl hover:shadow-2xl hover:scale-[1.02] active:scale-[0.98]"
             >
                 {isCapturing ? <RefreshCcw className="animate-spin" size={20}/> : <Camera size={20} />}
-                下載 IG 限動圖卡
+                下載收藏
             </button>
-            <p className="text-xs text-gray-400 text-center mt-2">
-               結果已自動傳給老師，只要下載圖片留念即可
-            </p>
           </div>
           
-          <button onClick={onRestart} className="w-full text-gray-400 text-sm hover:text-gray-600 flex items-center justify-center gap-1 py-2">
-              <RefreshCcw size={14} /> 重測一次
+          <button onClick={onRestart} className="w-full text-gray-400 text-xs font-bold hover:text-gray-600 flex items-center justify-center gap-1 py-2">
+              <RefreshCcw size={12} /> 重新測驗
           </button>
         </div>
       </div>
 
-      {/* Hidden IG Story Template */}
-      <div className="absolute top-0 left-0 w-full z-[-1] opacity-0 pointer-events-none overflow-hidden" style={{ width: '400px' }}>
-         <div ref={storyRef} className="w-[400px] h-[711px] bg-[#F0FDF4] relative flex flex-col items-center pt-20 px-8 text-center" style={{ fontFamily: '"Noto Sans TC", sans-serif' }}>
-            <div className={`absolute top-0 left-0 w-full h-[40%] ${details.color.split(' ')[0]} rounded-b-[60px] z-0`}></div>
-            <div className="absolute bottom-10 right-10 text-9xl opacity-10">🏡</div>
-            <div className="absolute top-10 left-10 text-6xl opacity-20">✨</div>
+      {/* ---------------------------------------------------------------------------------- */}
+      {/* Hidden IG Story Template (Off-screen rendering for glitch-free capture)            */}
+      {/* ---------------------------------------------------------------------------------- */}
+      <div 
+        ref={storyRef}
+        id="capture-target"
+        className="fixed"
+        style={{ 
+            left: '-2000px', // Move off-screen
+            top: 0,
+            width: '1080px', 
+            height: '1920px', 
+            zIndex: -1,
+            backgroundColor: '#fdfbf7',
+            fontFamily: '"Zen Maru Gothic", sans-serif'
+        }}
+      >
+         <div className="w-full h-full relative flex flex-col pt-[150px] px-12 items-center">
+            
+            {/* Background Decor */}
+            <div className={`absolute top-0 left-0 w-full h-[850px] ${details.color.replace('text-', 'bg-').replace('100', '100')} rounded-b-[150px] z-0 opacity-40`}></div>
+            
+            {/* Title */}
+            <div className="relative z-10 text-center mb-10">
+                <span className="inline-block px-6 py-2 bg-white/50 rounded-full text-2xl font-bold text-gray-600 tracking-widest mb-4">校園動物系人格測驗</span>
+                <h1 className="text-[90px] font-black text-gray-800 leading-none">MY PERSONA</h1>
+            </div>
 
-            <div className="relative z-10 w-full flex flex-col items-center">
-                <div className="w-48 h-48 bg-white rounded-full p-4 shadow-xl mb-8 flex items-center justify-center">
-                    {details.svg}
-                </div>
+            {/* Main Character */}
+            <div className="relative z-10 w-[550px] h-[550px] bg-white rounded-full p-12 shadow-[0_30px_80px_rgba(0,0,0,0.08)] mb-12 flex items-center justify-center">
+                {details.svg}
+            </div>
+
+            {/* Info Card */}
+            <div className="relative z-10 w-[900px] bg-white/90 backdrop-blur-md p-14 rounded-[80px] shadow-2xl border-4 border-white flex flex-col gap-10">
                 
-                <div className="bg-white/90 backdrop-blur-sm p-6 rounded-3xl shadow-lg w-full border-2 border-white">
-                    <p className="text-gray-500 font-bold tracking-widest text-sm mb-2">我是</p>
-                    <h1 className="text-4xl font-black text-gray-800 mb-2">{profile.animalName}</h1>
-                    <p className="text-teal-600 font-bold text-lg mb-6">{profile.animalType}</p>
-                    
-                    <div className="flex flex-wrap justify-center gap-2 mb-6">
+                {/* Name & Type */}
+                <div className="text-center border-b-4 border-gray-100 pb-10">
+                    <h2 className="text-[100px] font-black text-gray-800 mb-4">{profile.animalName}</h2>
+                    <div className="flex justify-center gap-4">
                         {profile.traits.map((t, i) => (
-                            <span key={i} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm font-bold">#{t}</span>
+                            <span key={i} className="px-8 py-3 bg-gray-100 text-gray-600 rounded-full text-3xl font-bold">#{t}</span>
                         ))}
                     </div>
+                </div>
 
-                    <div className="text-left bg-gray-50 p-4 rounded-xl text-gray-600 text-sm leading-relaxed mb-4">
-                        {profile.description.substring(0, 65)}...
+                {/* Analysis Stats (Rainbow Bars for Image) */}
+                <div className="space-y-8 px-4">
+                    <div>
+                        <div className="flex justify-between text-3xl font-bold text-gray-500 mb-3">
+                            <span>I (內向)</span>
+                            <span>社交能量</span>
+                            <span>E (外向)</span>
+                        </div>
+                        <div className="h-8 bg-gray-100 rounded-full overflow-visible relative">
+                             <div className="absolute inset-0 rounded-full bg-gradient-to-r from-sky-200 via-purple-200 to-rose-200 opacity-60"></div>
+                             {/* Simple Dot Marker for Image */}
+                             <div className="absolute top-1/2 -translate-y-1/2 w-12 h-12 bg-white rounded-full shadow-lg" style={{ left: `${socialPercent}%` }}></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div className="flex justify-between text-3xl font-bold text-gray-500 mb-3">
+                            <span>隨性</span>
+                            <span>整潔指數</span>
+                            <span>潔癖</span>
+                        </div>
+                        <div className="h-8 bg-gray-100 rounded-full overflow-visible relative">
+                             <div className="absolute inset-0 rounded-full bg-gradient-to-r from-sky-200 via-purple-200 to-rose-200 opacity-60"></div>
+                             {/* Simple Dot Marker for Image */}
+                             <div className="absolute top-1/2 -translate-y-1/2 w-12 h-12 bg-white rounded-full shadow-lg" style={{ left: `${cleanPercent}%` }}></div>
+                        </div>
                     </div>
                 </div>
 
-                <div className="mt-12 text-gray-400 font-bold tracking-widest text-sm">
-                    校園動物系人格測驗
+                {/* Best Match (Big Section) */}
+                <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-[50px] p-8 flex items-center justify-between border-4 border-pink-100 mt-4">
+                    <div className="pl-8">
+                         <div className="text-3xl font-bold text-pink-400 mb-2">BEST PARTNER</div>
+                         <div className="text-6xl font-black text-gray-700">{bestMatchDetails.label}</div>
+                    </div>
+                    <div className="w-40 h-40 bg-white rounded-full p-4 shadow-sm border-4 border-white">
+                        {bestMatchDetails.svg}
+                    </div>
                 </div>
-                <div className="mt-2 text-teal-600 font-bold">
-                    #心理測驗 #找到你的靈魂室友
-                </div>
+
             </div>
+            
+            <div className="absolute bottom-20 text-gray-400 font-bold text-4xl tracking-widest opacity-50">
+                #生活風格 #自我探索
+            </div>
+
          </div>
       </div>
     </div>

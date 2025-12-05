@@ -29,10 +29,13 @@ export const analyzeStudentProfile = async (name: string, answers: QuizAnswer[])
   const noise = getVal(10);        // 1: Tolerant/Passive, 3: Active/Aggressive
   
   const prefAns = getAns(11);
-  // If Q11 is 2 (Yes), we take the extraText, otherwise "隨緣"
-  const preferredRoommate = (prefAns?.answerValue === 2 && prefAns.extraText) 
-    ? prefAns.extraText 
-    : "無 (隨緣)";
+  
+  let preferredRoommate = "無 (隨緣)";
+  if (prefAns?.answerValue === 2 && prefAns.extraText) {
+      preferredRoommate = prefAns.extraText; // User typed a name
+  } else if (prefAns?.answerValue === 3) {
+      preferredRoommate = "不想換宿舍 (續住)";
+  }
 
   let type: AnimalType = AnimalType.KOALA;
   let traits: string[] = [];
@@ -81,7 +84,9 @@ export const analyzeStudentProfile = async (name: string, answers: QuizAnswer[])
   if (temp === 3) traits.push("極度怕熱");
   if (alarm === 3) traits.push("鬧鐘絕緣體");
   if (smell === 1) traits.push("好鼻師");
-  if (preferredRoommate !== "無 (隨緣)") traits.push("已有指定室友");
+  
+  if (prefAns?.answerValue === 2) traits.push("已有指定室友");
+  if (prefAns?.answerValue === 3) traits.push("續住意願");
 
   // Deduplicate and limit traits
   traits = [...new Set(traits)].slice(0, 3);
@@ -215,12 +220,27 @@ export const generateMockStudents = async (count: number = 20): Promise<StudentP
     for (let i = 0; i < count; i++) {
         const name = `${mockNames[i % mockNames.length]}${i + 1}`;
         // Random answers for 11 questions
-        const answers = Array.from({ length: 11 }, (_, idx) => ({ 
+        const answers: QuizAnswer[] = Array.from({ length: 11 }, (_, idx) => ({ 
             questionId: idx + 1, 
             answerValue: Math.floor(Math.random() * 3) + 1,
             answerText: "Mock" 
         }));
         
+        // Mock Q11 logic properly to test dashboard filters
+        const q11 = answers.find(a => a.questionId === 11);
+        if (q11) {
+             const r = Math.random();
+             if (r > 0.8) {
+                 q11.answerValue = 3; // Stay
+             } else if (r > 0.7) {
+                 q11.answerValue = 2; // Designated
+                 q11.extraText = `好友${i}`;
+             } else {
+                 q11.answerValue = 1; // Random
+                 q11.extraText = undefined; // Explicitly undefined to test sanitization
+             }
+        }
+
         const profile = await analyzeStudentProfile(name, answers);
         results.push(profile);
     }
