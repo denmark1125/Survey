@@ -54,7 +54,13 @@ export const analyzeStudentProfile = async (name: string, answers: QuizAnswer[])
     type = AnimalType.HAMSTER;
     traits.push("極度怕冷", "戀家/戀床");
   } 
-  // 2. Sleep Dominance (Owl vs Lark)
+  // 2. RABBIT Logic (New: Sensitive to noise + Introvert)
+  // Needs to be sensitive to noise (1) and like solitude (1)
+  else if (noise === 1 && freeTime === 1) {
+    type = AnimalType.RABBIT;
+    traits.push("對聲音敏感", "慢熟", "需要安靜");
+  }
+  // 3. Sleep Dominance (Owl vs Lark)
   else if (sleepTime === 3 && weekend >= 2) {
     type = AnimalType.OWL;
     traits.push("越夜越美麗", "靈感型");
@@ -62,7 +68,7 @@ export const analyzeStudentProfile = async (name: string, answers: QuizAnswer[])
     type = AnimalType.LARK;
     traits.push("晨間效率派", "規律作息");
   } else {
-    // 3. Personality Dominance
+    // 4. Personality Dominance
     if (cleanScore >= 5 && sharing === 1) {
       type = AnimalType.CAT;
       traits.push("極度愛乾淨", "重視隱私");

@@ -4,7 +4,7 @@ import { AnimalType, QuizQuestion } from "./types";
 export const TEACHER_EMAIL = "carlchen723@gmail.com";
 
 // Artistic SVG Illustrations (Premium Picture Book Style)
-export const ANIMAL_DETAILS: Record<AnimalType, { svg: React.ReactNode; color: string; label: string; description: string }> = {
+export const ANIMAL_DETAILS: Record<AnimalType, { svg: React.ReactNode; color: string; label: string; description: string; englishLabel: string; themeColor: string }> = {
   [AnimalType.OWL]: { 
     svg: React.createElement("svg", { viewBox: "0 0 200 200", className: "w-full h-full" },
       React.createElement("circle", { cx: "100", cy: "100", r: "90", fill: "#E9D5FF" }), // Lavender Base
@@ -20,6 +20,8 @@ export const ANIMAL_DETAILS: Record<AnimalType, { svg: React.ReactNode; color: s
     ), 
     color: 'bg-purple-100 text-purple-800', 
     label: '夜行貓頭鷹',
+    englishLabel: 'The Night Owl',
+    themeColor: '#E9D5FF',
     description: '你擁有藝術家般的靈魂，深夜往往是你精神最好的時刻。這代表你的生理時鐘比較晚，若環境允許，你會希望保留一點深夜的個人時光，安靜地做自己的事。'
   },
   [AnimalType.LARK]: { 
@@ -35,6 +37,8 @@ export const ANIMAL_DETAILS: Record<AnimalType, { svg: React.ReactNode; color: s
     ), 
     color: 'bg-yellow-100 text-yellow-800', 
     label: '晨型雲雀',
+    englishLabel: 'The Early Lark',
+    themeColor: '#FEF3C7',
     description: '你是自律的代名詞。當陽光灑下，你已準備好迎接挑戰。規律的生活讓你充滿正能量，對你來說，良好的睡眠品質與早晨的清新空氣是你維持活力的來源。'
   },
   [AnimalType.KOALA]: { 
@@ -49,6 +53,8 @@ export const ANIMAL_DETAILS: Record<AnimalType, { svg: React.ReactNode; color: s
     ), 
     color: 'bg-gray-100 text-gray-800', 
     label: '佛系無尾熊',
+    englishLabel: 'The Zen Koala',
+    themeColor: '#E5E7EB',
     description: '你的性格溫和，隨遇而安是你的人生哲學。在團體生活中，你通常是最好相處的那一位，只要彼此尊重，你在任何環境都能找到讓自己舒適的角落。'
   },
   [AnimalType.PUPPY]: { 
@@ -64,6 +70,8 @@ export const ANIMAL_DETAILS: Record<AnimalType, { svg: React.ReactNode; color: s
     ), 
     color: 'bg-orange-100 text-orange-800', 
     label: '熱情小狗',
+    englishLabel: 'The Friendly Puppy',
+    themeColor: '#FFEDD5',
     description: '你是團體中的開心果！喜歡與人互動，分享生活中的大小事。你帶有溫暖的特質，喜歡熱鬧的氛圍，通常能快速適應團體生活，是凝聚室友感情的重要角色。'
   },
   [AnimalType.CAT]: { 
@@ -78,6 +86,8 @@ export const ANIMAL_DETAILS: Record<AnimalType, { svg: React.ReactNode; color: s
     ), 
     color: 'bg-blue-100 text-blue-800', 
     label: '潔癖優雅貓',
+    englishLabel: 'The Elegant Cat',
+    themeColor: '#DBEAFE',
     description: '你優雅而獨立，擁有自己的生活美學。你比較注重個人空間與隱私，對於環境的氣味與整潔有一套自己的標準。雖然話不多，但心思細膩，懂得尊重他人的界線。'
   },
   [AnimalType.PEACOCK]: { 
@@ -93,6 +103,8 @@ export const ANIMAL_DETAILS: Record<AnimalType, { svg: React.ReactNode; color: s
     ), 
     color: 'bg-pink-100 text-pink-800', 
     label: '派對孔雀',
+    englishLabel: 'The Social Peacock',
+    themeColor: '#FCE7F3',
     description: '你自信大方，不拘小節。「亂中有序」是你的特色。你喜歡嘗試新鮮事物，生活豐富多彩，不太會去計較瑣碎的小細節，這樣的性格常讓周圍的氣氛變得輕鬆。'
   },
   [AnimalType.HAMSTER]: { 
@@ -109,8 +121,28 @@ export const ANIMAL_DETAILS: Record<AnimalType, { svg: React.ReactNode; color: s
     ), 
     color: 'bg-rose-100 text-rose-800', 
     label: '窩窩倉鼠',
+    englishLabel: 'The Cozy Hamster',
+    themeColor: '#FFE4E6',
     description: '你像小倉鼠一樣喜歡溫馨的角落，對於「舒適度」和「安全感」比較重視。你可能比較怕冷，或者喜歡把座位佈置得暖暖的。對你來說，宿舍不僅是睡覺的地方，更是充電的小窩。'
   },
+  [AnimalType.RABBIT]: { 
+    svg: React.createElement("svg", { viewBox: "0 0 200 200", className: "w-full h-full" },
+        React.createElement("circle", { cx: "100", cy: "100", r: "90", fill: "#CCFBF1" }), // Teal-100 Base
+        React.createElement("path", { d: "M60 20 Q40 80 50 90", fill: "#99F6E4" }), // Ear L Long
+        React.createElement("path", { d: "M140 20 Q160 80 150 90", fill: "#99F6E4" }), // Ear R Long
+        React.createElement("circle", { cx: "75", cy: "90", r: "8", fill: "#115E59" }), // Eye
+        React.createElement("circle", { cx: "125", cy: "90", r: "8", fill: "#115E59" }), // Eye
+        React.createElement("path", { d: "M100 100 L95 110 L105 110 Z", fill: "#FB7185" }), // Nose
+        React.createElement("path", { d: "M100 110 L100 125 M90 125 Q100 135 110 125", stroke: "#115E59", strokeWidth: "2", fill: "none" }), // Mouth
+        React.createElement("ellipse", { cx: "50", cy: "110", rx: "10", ry: "8", fill: "#FDA4AF", opacity: "0.5" }), // Blush
+        React.createElement("ellipse", { cx: "150", cy: "110", rx: "10", ry: "8", fill: "#FDA4AF", opacity: "0.5" })  // Blush
+    ), 
+    color: 'bg-teal-100 text-teal-800', 
+    label: '害羞小兔',
+    englishLabel: 'The Shy Rabbit',
+    themeColor: '#CCFBF1',
+    description: '你心思細膩，像小白兔一樣對聲音與環境的變化比較敏感。你喜歡擁有自己的安靜角落，雖然慢熟，但對熟悉的朋友非常貼心。在宿舍中，你需要一個能讓你完全放鬆、不受打擾的安全空間。'
+  }
 };
 
 export const QUIZ_QUESTIONS: QuizQuestion[] = [

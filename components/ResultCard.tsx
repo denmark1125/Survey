@@ -18,7 +18,8 @@ const getBestMatch = (type: AnimalType): AnimalType => {
     case AnimalType.PUPPY: return AnimalType.PEACOCK; // Puppy & Peacock = Fun House
     case AnimalType.CAT: return AnimalType.LARK; // Cat likes the quiet of a Lark
     case AnimalType.PEACOCK: return AnimalType.PUPPY; // Peacock needs audience
-    case AnimalType.HAMSTER: return AnimalType.HAMSTER; // Hamsters need warmth together
+    case AnimalType.HAMSTER: return AnimalType.RABBIT; // Hamsters need other quiet homebodies
+    case AnimalType.RABBIT: return AnimalType.CAT; // Rabbits like the quiet independence of Cats
     default: return AnimalType.KOALA;
   }
 };
@@ -220,7 +221,8 @@ const ResultCard: React.FC<Props> = ({ profile, onRestart }) => {
                 
                 {/* Name & Type */}
                 <div className="text-center border-b-4 border-gray-100 pb-10">
-                    <h2 className="text-[100px] font-black text-gray-800 mb-4">{profile.animalName}</h2>
+                    <div className="text-4xl font-bold text-gray-400 mb-2 font-serif italic">{details.englishLabel}</div>
+                    <h2 className="text-[100px] font-black mb-4" style={{color: details.themeColor ? details.themeColor.replace('100', '600') : '#333'}}>{profile.animalName}</h2>
                     <div className="flex justify-center gap-4">
                         {profile.traits.map((t, i) => (
                             <span key={i} className="px-8 py-3 bg-gray-100 text-gray-600 rounded-full text-3xl font-bold">#{t}</span>
@@ -271,6 +273,7 @@ const ResultCard: React.FC<Props> = ({ profile, onRestart }) => {
             
             <div className="absolute bottom-20 text-gray-400 font-bold text-4xl tracking-widest opacity-50">
                 #生活風格 #自我探索
+                <div className="text-xl mt-2 font-normal opacity-70">ID: {profile.id.slice(0,8)}</div>
             </div>
 
          </div>

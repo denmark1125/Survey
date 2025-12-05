@@ -5,7 +5,8 @@ export enum AnimalType {
   PUPPY = 'PUPPY',   // Social / High energy
   CAT = 'CAT',       // Independent / Clean
   PEACOCK = 'PEACOCK', // Expressive / Messy ok
-  HAMSTER = 'HAMSTER' // Cold / Nesting / Safe
+  HAMSTER = 'HAMSTER', // Cold / Nesting / Safe
+  RABBIT = 'RABBIT'   // Sensitive / Quiet / Introverted (New)
 }
 
 export interface QuizAnswer {
