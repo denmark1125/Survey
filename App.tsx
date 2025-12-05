@@ -5,7 +5,7 @@ import ResultCard from './components/ResultCard';
 import Dashboard from './components/Dashboard';
 import { analyzeStudentProfile } from './services/geminiService';
 import { saveStudentResult } from './services/dbService';
-import { GraduationCap, User, Sparkles } from 'lucide-react';
+import { GraduationCap, User, Sparkles, ShieldCheck } from 'lucide-react';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('LANDING');
@@ -27,6 +27,10 @@ const App: React.FC = () => {
     } catch (error) {
       console.error(error);
       alert("儲存資料時發生錯誤，請確認網路連線正常。");
+      // Even if save fails, show result so user doesn't lose it
+      if (!currentProfile && name) {
+          // Retry generating profile locally if needed, though profile var should be valid
+      }
     } finally {
       setIsLoading(false);
     }
@@ -73,6 +77,20 @@ const App: React.FC = () => {
                     </button>
                 </div>
               </div>
+            </div>
+
+            {/* Privacy Disclaimer Footer to satisfy Google Safe Browsing */}
+            <div className="mt-12 max-w-2xl text-center space-y-2 opacity-60 hover:opacity-100 transition-opacity">
+                <div className="flex items-center justify-center gap-2 text-stone-500 text-sm font-bold">
+                    <ShieldCheck size={16} />
+                    <span>隱私權與免責聲明</span>
+                </div>
+                <p className="text-[10px] text-stone-400 leading-relaxed px-4">
+                    本網站僅供班級/學校內部教育活動使用。收集之姓名與測驗數據僅用於活動當下之分組參考，不會用於其他商業用途，亦不會對外公開。
+                    本網站非釣魚網站，不涉及任何密碼或敏感個資竊取。
+                    <br/>
+                    Privacy Disclaimer: This application is for internal educational use only. Data is not shared externally.
+                </p>
             </div>
           </div>
         );

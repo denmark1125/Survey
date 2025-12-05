@@ -16,10 +16,19 @@ export const groupStudentsLocally = (students: StudentProfile[]): RoomGroup[] =>
   // Lower score = Early Bird / Cleaner
   
   const scoredStudents = students.map(s => {
-    // Determine Sleep Factor (using habits string logic or raw if needed, lets use raw inferred)
+    // Determine Sleep Factor
+    // Raw answers check or habits parsing
     let sleepFactor = 2;
+    // Heuristic based on string or raw answers if available
     if (s.habits.sleepTime.includes("PM") || s.habits.sleepTime.includes("10:30")) sleepFactor = 1;
     else if (s.habits.sleepTime.includes("02:30")) sleepFactor = 3;
+    
+    // Sort Score: Sleep * 1000 + (Inverted Cleanliness) * 10 + (Inverted Social)
+    // We invert cleanliness because usually 10=Cleanest is desirable to group together?
+    // Actually, let's group similar values.
+    // Let's sort simply: 
+    // Sleep: 1 (Early) -> 3 (Late)
+    // Cleanliness: 10 (Clean) -> 1 (Messy)
     
     const sortScore = (sleepFactor * 1000) + ((10 - s.habits.cleanliness) * 10) + (10 - s.habits.socialEnergy);
     
@@ -50,35 +59,35 @@ export const groupStudentsLocally = (students: StudentProfile[]): RoomGroup[] =>
     const conflicts: string[] = [];
     
     chunk.forEach(s => {
-        // Only check valid requests (ignore "None" and "Stay")
-        const validRequests = s.preferredRoommates.filter(name => 
-            name !== "無 (隨緣)" && !name.includes("續住")
+        // Valid requests check
+        const validRequests = (s.preferredRoommates || []).filter(name => 
+            name && name !== "無 (隨緣)" && !name.includes("續住")
         );
 
         if (validRequests.length > 0) {
             validRequests.forEach(targetName => {
                 // 1. Ghost Detection: Does this target exist in the entire class?
-                const targetProfile = students.find(st => st.name === targetName);
+                const targetProfile = students.find(st => st.name.trim() === targetName.trim());
                 if (!targetProfile) {
                      conflicts.push(`❓ ${s.name} 指定了找不到的對象「${targetName}」，請確認姓名`);
                      return;
                 }
 
                 // 2. Is target in this room?
-                if (chunk.find(c => c.name === targetName)) {
+                if (chunk.find(c => c.name === targetProfile.name)) {
                     // Good, they are together.
                 } else {
                     // Warning: Target is NOT in this room.
                     // 3. Check if it was Mutual (Did target also want s?)
-                    if (targetProfile.preferredRoommates.includes(s.name)) {
-                        conflicts.push(`⚠️ ${s.name} 與 ${targetName} 互相指定，但因作息差異被拆開`);
+                    if (targetProfile.preferredRoommates && targetProfile.preferredRoommates.includes(s.name)) {
+                        conflicts.push(`⚠️ ${s.name} 與 ${targetName} 互相指定，但因作息/整潔度差異被拆開`);
                     }
                 }
             });
         }
         
         // Stay request warning if moved? (Assuming current logic moves everyone)
-        if (s.preferredRoommates.some(r => r.includes("續住"))) {
+        if (s.preferredRoommates && s.preferredRoommates.some(r => r.includes("續住"))) {
              conflicts.push(`ℹ️ ${s.name} 提出續住需求，請確認是否原房`);
         }
     });
@@ -86,7 +95,7 @@ export const groupStudentsLocally = (students: StudentProfile[]): RoomGroup[] =>
     groups.push({
       roomId: String(roomIdCounter).padStart(3, '0'),
       students: chunk,
-      compatibilityScore: 90 - (conflicts.length * 5), 
+      compatibilityScore: Math.max(0, 95 - (conflicts.length * 10)), 
       reason: reason,
       potentialConflicts: conflicts.join("。")
     });
