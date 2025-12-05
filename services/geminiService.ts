@@ -120,7 +120,7 @@ export const analyzeStudentProfile = async (name: string, answers: QuizAnswer[])
 };
 
 /**
- * Takes a list of student profiles and groups them into rooms.
+ * Takes a list of student profiles and groups them into rooms using Gemini AI.
  */
 export const generateRoomGroups = async (students: StudentProfile[]): Promise<RoomGroup[]> => {
   // Initialize Gemini ONLY when needed, to prevent crash on load if key is missing
@@ -155,13 +155,12 @@ export const generateRoomGroups = async (students: StudentProfile[]): Promise<Ro
     required: ["groups"],
   };
 
-  // We need to keep the payload efficient.
   const rosterData = students.map(s => ({
     id: s.id,
     name: s.name,
     animal: s.animalName,
     preferredRoommate: s.preferredRoommate,
-    traits: s.traits, // Include traits for better context
+    traits: s.traits, 
     habits: s.habits
   }));
 
@@ -195,7 +194,6 @@ export const generateRoomGroups = async (students: StudentProfile[]): Promise<Ro
 
     const result = JSON.parse(response.text);
 
-    // Rehydrate the result with full student objects
     const finalGroups: RoomGroup[] = result.groups.map((g: any) => ({
       ...g,
       students: g.studentIds.map((sid: string) => students.find(s => s.id === sid)).filter(Boolean)
@@ -223,7 +221,8 @@ export const generateMockStudents = async (count: number = 20): Promise<StudentP
         const answers: QuizAnswer[] = Array.from({ length: 11 }, (_, idx) => ({ 
             questionId: idx + 1, 
             answerValue: Math.floor(Math.random() * 3) + 1,
-            answerText: "Mock" 
+            answerText: "Mock",
+            extraText: undefined // Explicitly null/undefined
         }));
         
         // Mock Q11 logic properly to test dashboard filters
@@ -237,7 +236,7 @@ export const generateMockStudents = async (count: number = 20): Promise<StudentP
                  q11.extraText = `好友${i}`;
              } else {
                  q11.answerValue = 1; // Random
-                 q11.extraText = undefined; // Explicitly undefined to test sanitization
+                 q11.extraText = undefined; 
              }
         }
 

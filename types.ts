@@ -52,4 +52,11 @@ export interface RoomGroup {
   potentialConflicts: string;
 }
 
+// New: Defines a student from the uploaded excel roster
+export interface OfficialStudent {
+  name: string;
+  originalRoom?: string; // Optional: current room number
+  studentId?: string;    // Optional: student ID
+}
+
 export type ViewState = 'LANDING' | 'QUIZ' | 'RESULT' | 'TEACHER_DASHBOARD';
