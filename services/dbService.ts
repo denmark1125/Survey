@@ -1,5 +1,5 @@
 import { db } from '../firebaseConfig';
-import { collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc } from 'firebase/firestore';
 import { StudentProfile } from '../types';
 
 const COLLECTION_NAME = 'students';
@@ -105,6 +105,32 @@ export const deleteStudent = async (id: string): Promise<void> => {
     await deleteDoc(doc(db, COLLECTION_NAME, id));
   } catch (error) {
     console.error("Error deleting document:", error);
+    throw error;
+  }
+};
+
+/**
+ * Update a student's name (Fix typos)
+ */
+export const updateStudentName = async (id: string, newName: string): Promise<void> => {
+  if (!db) return;
+  try {
+    await updateDoc(doc(db, COLLECTION_NAME, id), { name: newName });
+  } catch (error) {
+    console.error("Error updating name:", error);
+    throw error;
+  }
+};
+
+/**
+ * Update a student's gender (Fix missing/wrong gender)
+ */
+export const updateStudentGender = async (id: string, newGender: string): Promise<void> => {
+  if (!db) return;
+  try {
+    await updateDoc(doc(db, COLLECTION_NAME, id), { gender: newGender });
+  } catch (error) {
+    console.error("Error updating gender:", error);
     throw error;
   }
 };

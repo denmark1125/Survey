@@ -1,4 +1,3 @@
-
 import * as XLSX from 'xlsx';
 import { OfficialStudent, StudentProfile, RoomGroup } from '../types';
 
@@ -16,17 +15,27 @@ export const parseRosterFile = async (file: File): Promise<OfficialStudent[]> =>
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
         
-        // Convert to JSON array of arrays or objects
+        // Convert to JSON array of objects
         const json = XLSX.utils.sheet_to_json(worksheet);
         
-        // Map loose column names to strict interface
-        const roster: OfficialStudent[] = json.map((row: any) => ({
-          // Try various common column headers
-          name: (row['姓名'] || row['Name'] || row['學生姓名'] || '').toString().trim(),
-          gender: (row['性別'] || row['Gender'] || row['Sex'] || '').toString().trim(),
-          originalRoom: (row['房號'] || row['Room'] || row['原寢室'] || '').toString().trim(),
-          studentId: (row['學號'] || row['ID'] || '').toString().trim()
-        })).filter(s => s.name.length > 0); // Filter out empty rows
+        // Robust mapping: iterate keys to find case-insensitive matches
+        const roster: OfficialStudent[] = json.map((row: any) => {
+          const keys = Object.keys(row);
+          
+          const getKey = (patterns: string[]) => keys.find(k => patterns.some(p => k.toLowerCase().includes(p.toLowerCase())));
+
+          const nameKey = getKey(['姓名', 'Name', '學生姓名']);
+          const genderKey = getKey(['性別', 'Gender', 'Sex', '生理性別']);
+          const roomKey = getKey(['房號', 'Room', '原寢室', '寢室']);
+          const idKey = getKey(['學號', 'ID']);
+
+          return {
+            name: (nameKey ? row[nameKey] : '').toString().trim(),
+            gender: (genderKey ? row[genderKey] : '').toString().trim(),
+            originalRoom: (roomKey ? row[roomKey] : '').toString().trim(),
+            studentId: (idKey ? row[idKey] : '').toString().trim()
+          };
+        }).filter(s => s.name.length > 0); // Filter out empty rows
 
         resolve(roster);
       } catch (error) {

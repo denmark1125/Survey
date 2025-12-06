@@ -1,14 +1,13 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Login from './Login';
 import StudentDetailModal from './StudentDetailModal';
 import { generateRoomGroups, generateMockStudents } from '../services/geminiService';
 import { groupStudentsLocally } from '../services/localGroupingService';
-import { fetchClassroomData, clearDatabase, deleteStudent } from '../services/dbService';
+import { fetchClassroomData, clearDatabase, deleteStudent, updateStudentName, updateStudentGender } from '../services/dbService';
 import { parseRosterFile, exportDashboardToExcel, downloadRosterTemplate } from '../services/excelService';
 import { StudentProfile, RoomGroup, AnimalType, OfficialStudent } from '../types';
 import { ANIMAL_DETAILS } from '../constants';
-import { Users, Wand2, CloudDownload, Trash2, AlertTriangle, CheckCircle2, LogOut, Clock, Ghost, BarChart3, Moon, Sun, Home, UserCheck, Sparkles, Zap, Upload, FileSpreadsheet, UserX, AlertCircle, Download, XCircle } from 'lucide-react';
+import { Users, Wand2, CloudDownload, Trash2, AlertTriangle, CheckCircle2, LogOut, Clock, Ghost, BarChart3, Moon, Sun, Home, UserCheck, Sparkles, Zap, Upload, FileSpreadsheet, UserX, AlertCircle, Download, XCircle, HeartPulse, Pencil } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -52,11 +51,12 @@ const Dashboard: React.FC = () => {
   const missingStudents = useMemo(() => {
       if (officialRoster.length === 0) return [];
       
-      const takenQuizNames = new Set(students.map(s => s.name.trim().toLowerCase()));
+      // Normalize names for comparison (remove spaces, lowercase)
+      const takenQuizNames = new Set(students.map(s => s.name.replace(/\s/g, '').toLowerCase()));
+      
       return officialRoster.filter(official => {
-          // Check if name exists in takenQuizNames
-          // Simple match: exact trim match
-          return !takenQuizNames.has(official.name.trim().toLowerCase());
+          const normalizedOfficial = official.name.replace(/\s/g, '').toLowerCase();
+          return !takenQuizNames.has(normalizedOfficial);
       });
   }, [students, officialRoster]);
 
@@ -110,8 +110,14 @@ const Dashboard: React.FC = () => {
       setIsGrouping(true);
 
       // Pre-processing: Merge originalRoom AND GENDER from officialRoster if available
+      // ROBUST NAME MATCHING: Remove spaces and lowercase
       const enhancedStudents = students.map(s => {
-          const rosterInfo = officialRoster.find(r => r.name.trim() === s.name.trim());
+          const normalizedStudentName = s.name.replace(/\s/g, '').toLowerCase();
+          
+          const rosterInfo = officialRoster.find(r => 
+              r.name.replace(/\s/g, '').toLowerCase() === normalizedStudentName
+          );
+          
           return {
               ...s,
               originalRoom: rosterInfo?.originalRoom || s.originalRoom,
@@ -177,6 +183,49 @@ const Dashboard: React.FC = () => {
               alert("刪除失敗，請檢查網路");
               console.error(error);
           }
+      }
+  };
+
+  const handleEditName = async (e: React.MouseEvent, id: string, currentName: string) => {
+      e.stopPropagation();
+      const newName = prompt("請輸入新的姓名 (系統將自動去除空白):", currentName);
+      
+      if (newName && newName.trim() !== currentName) {
+          const cleanName = newName.replace(/\s/g, ''); // Remove all spaces
+          try {
+              await updateStudentName(id, cleanName);
+              // Update local state
+              setStudents(prev => prev.map(s => s.id === id ? { ...s, name: cleanName } : s));
+          } catch (error) {
+              alert("更新失敗，請檢查網路");
+              console.error(error);
+          }
+      }
+  };
+
+  const handleGenderToggle = async (e: React.MouseEvent, id: string, currentGender: string) => {
+      e.stopPropagation();
+      
+      // Determine next state: M -> F -> Unknown -> M
+      let nextGender = 'M';
+      let g = (currentGender || '').trim().toUpperCase();
+      
+      // Robust normalization before switching
+      if (['M', 'MALE', 'BOY', '男'].includes(g)) g = 'M';
+      else if (['F', 'FEMALE', 'GIRL', '女'].includes(g)) g = 'F';
+      else g = 'Unknown';
+
+      if (g === 'M') nextGender = 'F';
+      else if (g === 'F') nextGender = 'Unknown';
+      else nextGender = 'M';
+
+      try {
+          await updateStudentGender(id, nextGender);
+          // Update local state immediately
+          setStudents(prev => prev.map(s => s.id === id ? { ...s, gender: nextGender } : s));
+      } catch (error) {
+          console.error(error);
+          alert("更新性別失敗");
       }
   };
 
@@ -442,7 +491,36 @@ const Dashboard: React.FC = () => {
                   )}
                 </div>
               ) : (
-                filteredStudents.map((s) => (
+                filteredStudents.map((s) => {
+                  // Re-calculate enhanced data locally for display consistency if needed
+                  const normalizedName = s.name.replace(/\s/g, '').toLowerCase();
+                  const rosterMatch = officialRoster.find(r => r.name.replace(/\s/g, '').toLowerCase() === normalizedName);
+                  // Prefer Roster gender, then DB gender. 
+                  // If user manually updates DB gender (s.gender), we want that to show if Roster is missing or if we want to trust DB.
+                  // However, logic here usually implies Roster is the single source of truth for gender.
+                  // But if Roster fails to parse, we want the Manual Override (s.gender) to work.
+                  // If roster has "Unknown", we prefer s.gender if it is M/F.
+                  const rosterG = rosterMatch?.gender;
+                  let displayGender = s.gender || "Unknown";
+                  
+                  // Heuristic: If roster has valid gender, use it. Else use DB.
+                  if (rosterG && (rosterG.toLowerCase().startsWith('m') || rosterG.toLowerCase().startsWith('f') || rosterG.includes('男') || rosterG.includes('女'))) {
+                      displayGender = rosterG;
+                  }
+
+                  // Normalize for display
+                  let displayGenderNormalized = (displayGender || '').trim().toUpperCase();
+                  if (['M', 'MALE', 'BOY', '男'].includes(displayGenderNormalized)) displayGenderNormalized = 'M';
+                  else if (['F', 'FEMALE', 'GIRL', '女'].includes(displayGenderNormalized)) displayGenderNormalized = 'F';
+                  else displayGenderNormalized = 'UNKNOWN';
+                  
+                  // Gender Badge Color
+                  let genderBadgeClass = "bg-gray-200 text-gray-500";
+                  if (displayGenderNormalized === 'M') genderBadgeClass = "bg-blue-100 text-blue-600";
+                  if (displayGenderNormalized === 'F') genderBadgeClass = "bg-pink-100 text-pink-600";
+                  if (displayGenderNormalized === 'UNKNOWN') genderBadgeClass = "bg-red-100 text-red-500";
+
+                  return (
                   <div 
                     key={s.id} 
                     className="w-full flex items-center p-3 rounded-2xl border border-transparent hover:border-blue-200 hover:bg-blue-50 transition-all duration-200 relative group"
@@ -450,38 +528,60 @@ const Dashboard: React.FC = () => {
                     {/* Main content - Click to open modal */}
                     <button 
                         onClick={() => setSelectedStudent(s)}
-                        className="flex-grow flex items-center text-left"
+                        className="flex-grow flex items-center text-left min-w-0"
                     >
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center p-1 mr-3 shadow-sm ${ANIMAL_DETAILS[s.animalType]?.color.replace('text-', 'bg-').replace('100', '50')}`}>
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center p-1 mr-3 shadow-sm flex-shrink-0 ${ANIMAL_DETAILS[s.animalType]?.color.replace('text-', 'bg-').replace('100', '50')}`}>
                         {ANIMAL_DETAILS[s.animalType]?.svg}
                         </div>
                         <div className="flex-grow min-w-0">
                             <div className="flex justify-between items-center mb-0.5">
-                                <div className="font-bold text-gray-800 text-sm">{s.name}</div>
-                                {s.preferredRoommates && s.preferredRoommates.some(r => r !== "無 (隨緣)") && (
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${s.preferredRoommates.some(r => r.includes('不')) ? 'bg-orange-100 text-orange-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                                        {s.preferredRoommates.some(r => r.includes('不')) ? '續住' : `指定(${s.preferredRoommates.length})`}
-                                    </span>
-                                )}
+                                <div className="font-bold text-gray-800 text-sm flex items-center gap-1 truncate">
+                                    {s.name}
+                                </div>
+                                <div className="flex gap-1 flex-shrink-0 items-center">
+                                     {/* Clickable Gender Badge */}
+                                    <div 
+                                        role="button"
+                                        onClick={(e) => handleGenderToggle(e, s.id, displayGenderNormalized)}
+                                        className={`text-[9px] px-2 py-0.5 rounded font-bold cursor-pointer hover:scale-110 transition-transform ${genderBadgeClass}`}
+                                        title="點擊切換性別 (男/女/未知)"
+                                    >
+                                        {displayGenderNormalized === 'UNKNOWN' ? '?' : displayGenderNormalized === 'M' ? '男' : '女'}
+                                    </div>
+
+                                    {s.preferredRoommates && s.preferredRoommates.some(r => r !== "無 (隨緣)") && (
+                                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${s.preferredRoommates.some(r => r.includes('不')) ? 'bg-orange-100 text-orange-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                            {s.preferredRoommates.some(r => r.includes('不')) ? '續' : `指(${s.preferredRoommates.length})`}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
-                            <div className="text-[10px] text-gray-400 font-medium flex items-center gap-2">
+                            <div className="text-[10px] text-gray-400 font-medium flex items-center gap-1 truncate">
                                 <span className="bg-gray-100 px-1.5 rounded">{s.animalName}</span>
                                 {s.originalRoom && <span className="text-gray-300">| 原:{s.originalRoom}</span>}
-                                {s.gender && <span className="text-gray-300">| {s.gender}</span>}
                             </div>
                         </div>
                     </button>
 
-                    {/* Delete Button (Visible on hover) */}
+                    {/* Edit Name Button */}
+                    <button
+                        onClick={(e) => handleEditName(e, s.id, s.name)}
+                        className="ml-2 p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
+                        title="修改姓名 (除錯用)"
+                    >
+                        <Pencil size={16} />
+                    </button>
+
+                    {/* Delete Button */}
                     <button
                         onClick={(e) => handleSingleDelete(e, s.id, s.name)}
-                        className="ml-2 p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
+                        className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
                         title="刪除此筆資料"
                     >
                         <Trash2 size={16} />
                     </button>
                   </div>
-                ))
+                );})
               )}
             </div>
           </div>
@@ -532,19 +632,27 @@ const Dashboard: React.FC = () => {
                             {groups.map((group, idx) => (
                                 <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all hover:-translate-y-1">
                                     <div className="flex justify-between items-start mb-4">
-                                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                                            <span className={`text-white w-6 h-6 rounded flex items-center justify-center text-xs ${group.roomId.startsWith('M') ? 'bg-blue-600' : group.roomId.startsWith('F') ? 'bg-pink-500' : 'bg-gray-800'}`}>{group.roomId}</span>
-                                            寢室
-                                        </h3>
-                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${group.compatibilityScore > 85 ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                            契合度 {group.compatibilityScore}%
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-white min-w-[3.5rem] px-2 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${group.roomId.includes('男') ? 'bg-blue-600 shadow-blue-200' : group.roomId.includes('女') ? 'bg-pink-500 shadow-pink-200' : 'bg-gray-500'} shadow-md`}>{group.roomId}</span>
+                                        </div>
+                                        <div className="flex flex-col items-end">
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wide ${group.compatibilityScore >= 90 ? 'bg-emerald-100 text-emerald-700' : group.compatibilityScore >= 70 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                                                契合度 {group.compatibilityScore}
+                                            </span>
+                                            {/* Score Visualization Bar */}
+                                            <div className="w-20 h-1.5 bg-gray-100 rounded-full mt-1 overflow-hidden">
+                                                <div 
+                                                    className={`h-full rounded-full ${group.compatibilityScore >= 90 ? 'bg-emerald-500' : group.compatibilityScore >= 70 ? 'bg-amber-500' : 'bg-red-500'}`} 
+                                                    style={{ width: `${group.compatibilityScore}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
                                     </div>
                                     
                                     {/* Avatars */}
                                     <div className="flex -space-x-2 mb-4 px-2">
                                         {group.students.map(s => (
-                                            <div key={s.id} className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center p-0.5 relative z-0 hover:z-10 hover:scale-125 transition-transform shadow-sm ${ANIMAL_DETAILS[s.animalType]?.color.replace('text-', 'bg-').replace('100', '50')}`} title={s.name}>
+                                            <div key={s.id} className={`w-9 h-9 rounded-full border-2 border-white flex items-center justify-center p-0.5 relative z-0 hover:z-10 hover:scale-125 transition-transform shadow-sm ${ANIMAL_DETAILS[s.animalType]?.color.replace('text-', 'bg-').replace('100', '50')}`} title={s.name}>
                                                 {ANIMAL_DETAILS[s.animalType]?.svg}
                                             </div>
                                         ))}
@@ -561,7 +669,7 @@ const Dashboard: React.FC = () => {
 
                                     <div className="space-y-2 pt-3 border-t border-gray-50">
                                         <div className="flex items-start gap-2">
-                                            <CheckCircle2 size={14} className="text-green-500 mt-0.5 flex-shrink-0" />
+                                            <HeartPulse size={14} className="text-rose-400 mt-0.5 flex-shrink-0" />
                                             <p className="text-xs text-gray-600 leading-relaxed text-justify">{group.reason}</p>
                                         </div>
                                         {group.potentialConflicts && (

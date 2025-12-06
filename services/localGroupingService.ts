@@ -11,30 +11,78 @@ const normalizeGender = (g?: string): 'M' | 'F' | 'U' => {
     return 'U';
 };
 
-const calculateScore = (group: StudentProfile[]) => {
+/**
+ * Advanced Score Calculation for a group of students.
+ * Base Score: 100
+ * Penalties: Variance in habits (Sleep is heavily penalized)
+ * Bonuses: Mutual preferences, Preserved room status
+ */
+const calculateScore = (group: StudentProfile[], isPreservedRoom: boolean = false) => {
+    if (group.length < 2) return 100; // Single person is perfectly compatible with themselves
+
     let score = 100;
-    // Simple habit comparison logic
-    let avgSleep = 0;
-    let avgClean = 0;
-    group.forEach(s => {
-        avgSleep += s.habits.sleepTime.includes("AM") ? 3 : 1; 
-        avgClean += s.habits.cleanliness;
-    });
-    avgSleep /= group.length;
-    avgClean /= group.length;
+    
+    // 1. Calculate Averages
+    let sumSleep = 0; // 1 (Early) to 3 (Late)
+    let sumClean = 0; // 1-10
+    let sumSocial = 0; // 1-10
+    let sumNoise = 0; // 1-10
 
-    // Deduct points for variance
     group.forEach(s => {
-        const sleep = s.habits.sleepTime.includes("AM") ? 3 : 1;
-        score -= Math.abs(sleep - avgSleep) * 10;
-        score -= Math.abs(s.habits.cleanliness - avgClean) * 2;
+        sumSleep += s.habits.sleepTime.includes("PM") ? 1 : 3; 
+        sumClean += s.habits.cleanliness;
+        sumSocial += s.habits.socialEnergy;
+        sumNoise += s.habits.noiseTolerance;
     });
 
-    return Math.max(0, Math.round(score));
+    const avgSleep = sumSleep / group.length;
+    const avgClean = sumClean / group.length;
+    const avgSocial = sumSocial / group.length;
+    const avgNoise = sumNoise / group.length;
+
+    // 2. Calculate Penalties (Variance)
+    let totalSleepDiff = 0;
+    let totalCleanDiff = 0;
+    let totalSocialDiff = 0;
+    let totalNoiseDiff = 0;
+
+    group.forEach(s => {
+        const sleepVal = s.habits.sleepTime.includes("PM") ? 1 : 3;
+        totalSleepDiff += Math.abs(sleepVal - avgSleep);
+        totalCleanDiff += Math.abs(s.habits.cleanliness - avgClean);
+        totalSocialDiff += Math.abs(s.habits.socialEnergy - avgSocial);
+        totalNoiseDiff += Math.abs(s.habits.noiseTolerance - avgNoise);
+    });
+
+    // Weights: Sleep is critical (x15), Clean/Noise (x2), Social (x1)
+    // Sleep diff max is roughly 1 per person. x15 means heavy penalty for mixed sleep schedules.
+    score -= (totalSleepDiff * 15); 
+    score -= (totalCleanDiff * 2);
+    score -= (totalNoiseDiff * 2);
+    score -= (totalSocialDiff * 1);
+
+    // 3. Bonuses
+    // Bonus for Preserved Room (Stability)
+    if (isPreservedRoom) score += 10;
+
+    // Bonus for Mutual Preferences
+    // Check pairs
+    for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+            const s1 = group[i];
+            const s2 = group[j];
+            if (s1.preferredRoommates?.includes(s2.name) || s2.preferredRoommates?.includes(s1.name)) {
+                score += 5; // +5 for each satisfied preference link
+            }
+        }
+    }
+
+    // Clamp score 0-100
+    return Math.min(100, Math.max(0, Math.round(score)));
 };
 
 export const groupStudentsLocally = (allStudents: StudentProfile[]): RoomGroup[] => {
-    // 1. Partition by Gender
+    // 1. Partition by Gender - STRICT SEPARATION
     const males: StudentProfile[] = [];
     const females: StudentProfile[] = [];
     const unknown: StudentProfile[] = [];
@@ -47,7 +95,7 @@ export const groupStudentsLocally = (allStudents: StudentProfile[]): RoomGroup[]
     });
 
     // Helper to process a single gender group
-    const processGroup = (students: StudentProfile[], prefix: string): RoomGroup[] => {
+    const processGroup = (students: StudentProfile[], prefixName: string): RoomGroup[] => {
         const groups: RoomGroup[] = [];
         let remaining = [...students];
 
@@ -74,9 +122,9 @@ export const groupStudentsLocally = (allStudents: StudentProfile[]): RoomGroup[]
                 // If majority implies staying, lock them
                 if (stayVotes >= occupants.length / 2) {
                     groups.push({
-                        roomId: roomId, // Keep original room ID
+                        roomId: roomId, // Keep original room ID (e.g., 101)
                         students: occupants,
-                        compatibilityScore: calculateScore(occupants),
+                        compatibilityScore: calculateScore(occupants, true), // Pass true for preserved room bonus
                         reason: `【原房續住】保留原寢室 ${roomId} 成員 (${occupants.length}人)`,
                         potentialConflicts: ""
                     });
@@ -106,16 +154,18 @@ export const groupStudentsLocally = (allStudents: StudentProfile[]): RoomGroup[]
             if (remaining.length === 5 || remaining.length === 6) size = 3; 
 
             const chunk = remaining.splice(0, size);
-            const roomId = `${prefix}-${roomCount++}`;
+            
+            // Format: "男宿-01", "女宿-01"
+            const roomId = `${prefixName}-${String(roomCount++).padStart(2, '0')}`;
             
             // Logic to check Mutual Matches and Ghosts
             let conflicts: string[] = [];
-            let mutualTags: string[] = [];
 
             // Check Ghost Names (Requested someone not in list)
             chunk.forEach(s => {
                 s.preferredRoommates?.forEach(reqName => {
                     if (!['無 (隨緣)', '續住', '不想換宿舍 (續住)'].includes(reqName) && !reqName.includes('不')) {
+                        // Check if the requested name exists in the FULL student list (not just this chunk)
                         const exists = allStudents.some(poolS => poolS.name === reqName);
                         if (!exists) {
                             conflicts.push(`❓ ${s.name} 指定了「${reqName}」但名單中找不到此人`);
@@ -127,7 +177,7 @@ export const groupStudentsLocally = (allStudents: StudentProfile[]): RoomGroup[]
             // Check if someone wanted to stay but got moved
             chunk.forEach(s => {
                 if (s.preferredRoommates?.some(r => r.includes("續住") || r.includes("不"))) {
-                     if (s.originalRoom && s.originalRoom !== roomId) { // Note: roomId might be different format, heuristic check
+                     if (s.originalRoom && s.originalRoom !== roomId) { 
                         conflicts.push(`⚠️ ${s.name} 想續住 (原:${s.originalRoom}) 但被分配到新房`);
                      }
                 }
@@ -149,10 +199,22 @@ export const groupStudentsLocally = (allStudents: StudentProfile[]): RoomGroup[]
         return groups;
     };
 
-    // Execute logic for each gender
+    // Execute logic for each gender separately
+    // If unknown gender, put them in a special warning group
+    const unknownGroups: RoomGroup[] = [];
+    if (unknown.length > 0) {
+        unknownGroups.push({
+            roomId: "⚠️待確認",
+            students: unknown,
+            compatibilityScore: 0,
+            reason: "資料缺漏：請檢查 Excel 是否包含正確性別",
+            potentialConflicts: "無法進行性別分流"
+        });
+    }
+
     return [
-        ...processGroup(males, 'M'),
-        ...processGroup(females, 'F'),
-        ...processGroup(unknown, 'U')
+        ...processGroup(males, '男宿'),
+        ...processGroup(females, '女宿'),
+        ...unknownGroups
     ];
 };
