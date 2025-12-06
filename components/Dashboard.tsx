@@ -109,13 +109,13 @@ const Dashboard: React.FC = () => {
       }
       setIsGrouping(true);
 
-      // Pre-processing: Merge originalRoom from officialRoster if available
-      // This is crucial for the "Preserve Existing Room" logic
+      // Pre-processing: Merge originalRoom AND GENDER from officialRoster if available
       const enhancedStudents = students.map(s => {
           const rosterInfo = officialRoster.find(r => r.name.trim() === s.name.trim());
           return {
               ...s,
-              originalRoom: rosterInfo?.originalRoom || s.originalRoom
+              originalRoom: rosterInfo?.originalRoom || s.originalRoom,
+              gender: rosterInfo?.gender || s.gender || "Unknown"
           };
       });
 
@@ -302,7 +302,7 @@ const Dashboard: React.FC = () => {
                     <button 
                         onClick={downloadRosterTemplate}
                         className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-200 transition-colors"
-                        title="下載Excel範本"
+                        title="下載Excel範本 (姓名/性別/房號)"
                     >
                         <Download size={18} />
                     </button>
@@ -419,7 +419,9 @@ const Dashboard: React.FC = () => {
                             <div key={idx} className="w-full text-left flex items-center justify-between p-3 rounded-2xl bg-red-50/50 border border-red-100">
                                 <div>
                                     <div className="font-bold text-gray-800 text-sm">{s.name}</div>
-                                    <div className="text-[10px] text-gray-400 font-medium">原房號: {s.originalRoom || '未填寫'}</div>
+                                    <div className="text-[10px] text-gray-400 font-medium">
+                                        房:{s.originalRoom || '-'} | 性別:{s.gender || '-'}
+                                    </div>
                                 </div>
                                 <UserX size={16} className="text-red-300" />
                             </div>
@@ -465,6 +467,7 @@ const Dashboard: React.FC = () => {
                             <div className="text-[10px] text-gray-400 font-medium flex items-center gap-2">
                                 <span className="bg-gray-100 px-1.5 rounded">{s.animalName}</span>
                                 {s.originalRoom && <span className="text-gray-300">| 原:{s.originalRoom}</span>}
+                                {s.gender && <span className="text-gray-300">| {s.gender}</span>}
                             </div>
                         </div>
                     </button>
@@ -498,7 +501,7 @@ const Dashboard: React.FC = () => {
                             onClick={handleAnalyzeLocal}
                             disabled={students.length === 0 || isGrouping}
                             className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white rounded-full font-bold shadow-lg shadow-emerald-200 transition-all active:scale-95 disabled:opacity-50 disabled:shadow-none text-sm flex items-center gap-2"
-                            title="依照作息與整潔度自動分組"
+                            title="依照性別、作息與整潔度自動分組"
                         >
                             <Zap size={16} fill="currentColor"/> {isGrouping ? '運算中...' : '快速分組 (本地運算)'}
                         </button>
@@ -522,7 +525,7 @@ const Dashboard: React.FC = () => {
                                 <BarChart3 size={40} className="text-gray-300" />
                             </div>
                             <p className="font-medium">尚未進行分組</p>
-                            <p className="text-sm mt-1 opacity-70 max-w-xs text-center">準備好學生名單後，點擊「快速分組」，系統將會依照作息一致性進行最佳配對</p>
+                            <p className="text-sm mt-1 opacity-70 max-w-xs text-center">準備好學生名單(含性別)後，點擊「快速分組」，系統將會依照性別分流並進行最佳配對</p>
                         </div>
                     ) : (
                         <div className="grid md:grid-cols-2 gap-5">
@@ -530,7 +533,7 @@ const Dashboard: React.FC = () => {
                                 <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all hover:-translate-y-1">
                                     <div className="flex justify-between items-start mb-4">
                                         <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                                            <span className="bg-gray-800 text-white w-6 h-6 rounded flex items-center justify-center text-xs">{group.roomId}</span>
+                                            <span className={`text-white w-6 h-6 rounded flex items-center justify-center text-xs ${group.roomId.startsWith('M') ? 'bg-blue-600' : group.roomId.startsWith('F') ? 'bg-pink-500' : 'bg-gray-800'}`}>{group.roomId}</span>
                                             寢室
                                         </h3>
                                         <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${group.compatibilityScore > 85 ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
@@ -551,7 +554,7 @@ const Dashboard: React.FC = () => {
                                     <div className="flex flex-wrap gap-1.5 mb-4">
                                         {group.students.map(s => (
                                             <span key={s.id} className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">
-                                                {s.name}
+                                                {s.name} 
                                             </span>
                                         ))}
                                     </div>
@@ -564,7 +567,9 @@ const Dashboard: React.FC = () => {
                                         {group.potentialConflicts && (
                                             <div className="flex items-start gap-2 bg-orange-50 p-2 rounded-lg mt-2">
                                                 <AlertTriangle size={14} className="text-orange-500 mt-0.5 flex-shrink-0" />
-                                                <p className="text-[10px] text-orange-700 leading-relaxed font-bold">{group.potentialConflicts}</p>
+                                                <p className="text-[10px] text-orange-700 leading-relaxed font-bold whitespace-pre-line">
+                                                    {group.potentialConflicts.split('。').join('\n')}
+                                                </p>
                                             </div>
                                         )}
                                     </div>

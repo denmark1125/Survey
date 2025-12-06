@@ -1,160 +1,158 @@
 
 import { StudentProfile, RoomGroup } from "../types";
+import { ANIMAL_DETAILS } from "../constants";
 
-/**
- * Deterministic Algorithm for Grouping Students
- * Priority:
- * 1. **Preserve Existing Rooms**: If students in the same original room want to stay or are neutral, and are compatible, keep them.
- * 2. Sleep Schedule (Strict sorting)
- * 3. Cleanliness (Sorting within sleep schedule)
- * 4. Social Energy
- */
-export const groupStudentsLocally = (students: StudentProfile[]): RoomGroup[] => {
-  const groups: RoomGroup[] = [];
-  const assignedStudentIds = new Set<string>();
+// Helper to normalize gender strings
+const normalizeGender = (g?: string): 'M' | 'F' | 'U' => {
+    if (!g) return 'U';
+    const s = g.trim().toUpperCase();
+    if (['M', 'MALE', 'BOY', '男', '男生'].includes(s)) return 'M';
+    if (['F', 'FEMALE', 'GIRL', '女', '女生'].includes(s)) return 'F';
+    return 'U';
+};
 
-  // --- PHASE 1: PRESERVE EXISTING ROOMS ---
-  // Scan through original rooms
-  const originalRoomMap = new Map<string, StudentProfile[]>();
-  students.forEach(s => {
-      if (s.originalRoom) {
-          if (!originalRoomMap.has(s.originalRoom)) originalRoomMap.set(s.originalRoom, []);
-          originalRoomMap.get(s.originalRoom)?.push(s);
-      }
-  });
+const calculateScore = (group: StudentProfile[]) => {
+    let score = 100;
+    // Simple habit comparison logic
+    let avgSleep = 0;
+    let avgClean = 0;
+    group.forEach(s => {
+        avgSleep += s.habits.sleepTime.includes("AM") ? 3 : 1; 
+        avgClean += s.habits.cleanliness;
+    });
+    avgSleep /= group.length;
+    avgClean /= group.length;
 
-  originalRoomMap.forEach((roomStudents, roomNum) => {
-      // Logic to determine if we should lock this room:
-      // 1. Are there enough people? (Assuming >= 3 for a valid group, or if they explicitly asked to stay)
-      // 2. Are they compatible? (Check sleep variance)
-      // 3. Do they WANT to stay? (Stay or Random)
-      
-      const candidates = roomStudents.filter(s => {
-          const prefs = s.preferredRoommates || [];
-          // Filter out if they explicitly designated someone NOT in this room (Hard to track, simplify to:)
-          // If they chose "Stay" or "Random" or "Designated" (we assume designated are usually friends in same room)
-          return true; // For now consider all, then validate
-      });
+    // Deduct points for variance
+    group.forEach(s => {
+        const sleep = s.habits.sleepTime.includes("AM") ? 3 : 1;
+        score -= Math.abs(sleep - avgSleep) * 10;
+        score -= Math.abs(s.habits.cleanliness - avgClean) * 2;
+    });
 
-      if (candidates.length >= 3) {
-          // Check Compatibility: Sleep
-          // If mix of Early (1) and Late (3) is present, it's a conflict.
-          const sleepTypes = new Set(candidates.map(s => {
-             if (s.habits.sleepTime.includes("PM")) return 1; 
-             if (s.habits.sleepTime.includes("02:30")) return 3; 
-             return 2; 
-          }));
-          const hasSleepConflict = sleepTypes.has(1) && sleepTypes.has(3);
+    return Math.max(0, Math.round(score));
+};
 
-          // Check Intent: Does anyone explicitly want to leave? 
-          // (Q11 doesn't have "Leave", but if they designated someone else, they might)
-          // For this feature, we prioritize stability. If they didn't sleep-conflict, we keep them.
-          
-          if (!hasSleepConflict) {
-              // LOCK THIS ROOM
-              groups.push({
-                  roomId: roomNum, // Use original room number
-                  students: candidates,
-                  compatibilityScore: 100,
-                  reason: `【原房續住】成員生活習慣相近 (作息無衝突) 且具備續住意願，優先保留原房號。`,
-                  potentialConflicts: ""
-              });
-              candidates.forEach(s => assignedStudentIds.add(s.id));
-          }
-      }
-  });
+export const groupStudentsLocally = (allStudents: StudentProfile[]): RoomGroup[] => {
+    // 1. Partition by Gender
+    const males: StudentProfile[] = [];
+    const females: StudentProfile[] = [];
+    const unknown: StudentProfile[] = [];
 
+    allStudents.forEach(s => {
+        const g = normalizeGender(s.gender);
+        if (g === 'M') males.push(s);
+        else if (g === 'F') females.push(s);
+        else unknown.push(s);
+    });
 
-  // --- PHASE 2: SORT REMAINING ---
-  const remainingStudents = students.filter(s => !assignedStudentIds.has(s.id));
+    // Helper to process a single gender group
+    const processGroup = (students: StudentProfile[], prefix: string): RoomGroup[] => {
+        const groups: RoomGroup[] = [];
+        let remaining = [...students];
 
-  // 1. Calculate a "Sort Score"
-  const scoredStudents = remainingStudents.map(s => {
-    let sleepFactor = 2;
-    if (s.habits.sleepTime.includes("PM") || s.habits.sleepTime.includes("10:30")) sleepFactor = 1;
-    else if (s.habits.sleepTime.includes("02:30")) sleepFactor = 3;
-    
-    // Sort Score: Sleep * 1000 + (Inverted Cleanliness) * 10 + (Inverted Social)
-    const sortScore = (sleepFactor * 1000) + ((10 - s.habits.cleanliness) * 10) + (10 - s.habits.socialEnergy);
-    
-    return { ...s, sortScore, sleepFactor };
-  });
+        // --- PHASE 1: PRESERVE EXISTING ROOMS ---
+        // Group by original room
+        const roomMap = new Map<string, StudentProfile[]>();
+        remaining.forEach(s => {
+            if (s.originalRoom) {
+                if (!roomMap.has(s.originalRoom)) roomMap.set(s.originalRoom, []);
+                roomMap.get(s.originalRoom)?.push(s);
+            }
+        });
 
-  // 2. Sort the roster
-  scoredStudents.sort((a, b) => a.sortScore - b.sortScore);
-
-  // 3. Slice into chunks
-  const roomSize = 4;
-  let roomIdCounter = 1;
-  
-  // Find a safe start for new room IDs (avoid clashing with preserved original rooms)
-  const existingRoomIds = new Set(groups.map(g => g.roomId));
-  while (existingRoomIds.has(String(roomIdCounter).padStart(3, '0'))) {
-      roomIdCounter++;
-  }
-
-  for (let i = 0; i < scoredStudents.length; i += roomSize) {
-    const chunk = scoredStudents.slice(i, i + roomSize);
-    
-    // Analyze the chunk
-    const avgSleep = chunk.reduce((acc, c) => acc + c.sleepFactor, 0) / chunk.length;
-    let type = "混合型";
-    if (avgSleep < 1.5) type = "晨型人 (早睡區)";
-    else if (avgSleep > 2.5) type = "夜貓子 (熬夜區)";
-    
-    const reason = `本寢室為「${type}」。成員作息相近，能大幅減少睡眠干擾。平均整潔指數為 ${(chunk.reduce((acc, c) => acc + c.habits.cleanliness, 0) / chunk.length).toFixed(1)}/10。`;
-
-    const conflicts: string[] = [];
-    const thisRoomId = String(roomIdCounter).padStart(3, '0');
-    
-    chunk.forEach(s => {
-        // Valid requests check
-        const validRequests = (s.preferredRoommates || []).filter(name => 
-            name && name !== "無 (隨緣)" && !name.includes("續住")
-        );
-
-        if (validRequests.length > 0) {
-            validRequests.forEach(targetName => {
-                // Ghost Detection
-                const targetProfile = students.find(st => st.name.trim() === targetName.trim());
-                if (!targetProfile) {
-                     conflicts.push(`❓ ${s.name} 指定了找不到的對象「${targetName}」`);
-                     return;
+        // Evaluate each existing room
+        roomMap.forEach((occupants, roomId) => {
+            if (occupants.length >= 3) { // Only preserve if enough people
+                // Check if they want to stay or don't care
+                const stayVotes = occupants.filter(s => 
+                    s.preferredRoommates?.some(r => r.includes("續住") || r.includes("不")) || 
+                    s.preferredRoommates?.includes("無 (隨緣)") ||
+                    (!s.preferredRoommates || s.preferredRoommates.length === 0)
+                ).length;
+                
+                // If majority implies staying, lock them
+                if (stayVotes >= occupants.length / 2) {
+                    groups.push({
+                        roomId: roomId, // Keep original room ID
+                        students: occupants,
+                        compatibilityScore: calculateScore(occupants),
+                        reason: `【原房續住】保留原寢室 ${roomId} 成員 (${occupants.length}人)`,
+                        potentialConflicts: ""
+                    });
+                    // Remove form remaining
+                    remaining = remaining.filter(s => !occupants.includes(s));
                 }
+            }
+        });
 
-                // Is target in this room?
-                if (chunk.find(c => c.name === targetProfile.name)) {
-                    // Together
-                } else {
-                    // Mutual check
-                    if (targetProfile.preferredRoommates && targetProfile.preferredRoommates.includes(s.name)) {
-                        conflicts.push(`⚠️ ${s.name} 與 ${targetName} 互相指定但被拆開`);
+        // --- PHASE 2: SORT & SLICE REMAINING ---
+        // Sort criteria: 1. Sleep Time (Early to Late), 2. Cleanliness
+        remaining.sort((a, b) => {
+            // Sleep: Early (1) < Late (3)
+            const sleepA = a.habits.sleepTime.includes("PM") ? 1 : 3;
+            const sleepB = b.habits.sleepTime.includes("PM") ? 1 : 3;
+            if (sleepA !== sleepB) return sleepA - sleepB;
+            
+            // Cleanliness: High to Low
+            return b.habits.cleanliness - a.habits.cleanliness;
+        });
+
+        // Slice into chunks of 4 (preferred) or 3
+        let roomCount = 1;
+        while (remaining.length > 0) {
+            let size = 4;
+            // Adjustment for remainders to avoid solo rooms
+            if (remaining.length === 5 || remaining.length === 6) size = 3; 
+
+            const chunk = remaining.splice(0, size);
+            const roomId = `${prefix}-${roomCount++}`;
+            
+            // Logic to check Mutual Matches and Ghosts
+            let conflicts: string[] = [];
+            let mutualTags: string[] = [];
+
+            // Check Ghost Names (Requested someone not in list)
+            chunk.forEach(s => {
+                s.preferredRoommates?.forEach(reqName => {
+                    if (!['無 (隨緣)', '續住', '不想換宿舍 (續住)'].includes(reqName) && !reqName.includes('不')) {
+                        const exists = allStudents.some(poolS => poolS.name === reqName);
+                        if (!exists) {
+                            conflicts.push(`❓ ${s.name} 指定了「${reqName}」但名單中找不到此人`);
+                        }
                     }
+                });
+            });
+
+            // Check if someone wanted to stay but got moved
+            chunk.forEach(s => {
+                if (s.preferredRoommates?.some(r => r.includes("續住") || r.includes("不"))) {
+                     if (s.originalRoom && s.originalRoom !== roomId) { // Note: roomId might be different format, heuristic check
+                        conflicts.push(`⚠️ ${s.name} 想續住 (原:${s.originalRoom}) 但被分配到新房`);
+                     }
                 }
             });
-        }
-        
-        // Stay request warning
-        // Only warn if they wanted to stay, BUT they are NOT in their original room.
-        // And ensure they actually HAD an original room to begin with.
-        if (s.preferredRoommates && s.preferredRoommates.some(r => r.includes("續住"))) {
-             if (s.originalRoom && s.originalRoom !== thisRoomId) {
-                 conflicts.push(`ℹ️ ${s.name} 想續住原房(${s.originalRoom})，但被分配至新房`);
-             }
-        }
-    });
 
-    groups.push({
-      roomId: thisRoomId,
-      students: chunk,
-      compatibilityScore: Math.max(0, 95 - (conflicts.length * 10)), 
-      reason: reason,
-      potentialConflicts: conflicts.join("。")
-    });
-    
-    // Increment ID and skip any that might exist
-    do { roomIdCounter++; } while (existingRoomIds.has(String(roomIdCounter).padStart(3, '0')));
-  }
+            // Detect Compatibility issues
+            const hasEarly = chunk.some(s => s.habits.sleepTime.includes("PM"));
+            const hasLate = chunk.some(s => s.habits.sleepTime.includes("AM"));
+            if (hasEarly && hasLate) conflicts.push("⚠️ 作息衝突：早睡與熬夜混住");
 
-  return groups.sort((a,b) => a.roomId.localeCompare(b.roomId)); // Sort by Room ID for clean display
+            groups.push({
+                roomId: roomId,
+                students: chunk,
+                compatibilityScore: calculateScore(chunk),
+                reason: `依生活作息排序分配 (${hasEarly ? '早睡' : '晚睡'}組)`,
+                potentialConflicts: conflicts.join("。 ")
+            });
+        }
+        return groups;
+    };
+
+    // Execute logic for each gender
+    return [
+        ...processGroup(males, 'M'),
+        ...processGroup(females, 'F'),
+        ...processGroup(unknown, 'U')
+    ];
 };

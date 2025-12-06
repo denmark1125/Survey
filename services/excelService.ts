@@ -1,10 +1,10 @@
+
 import * as XLSX from 'xlsx';
-import { StudentProfile, RoomGroup, OfficialStudent, QuizAnswer } from '../types';
-import { QUIZ_QUESTIONS } from '../constants';
+import { OfficialStudent, StudentProfile, RoomGroup } from '../types';
 
 /**
  * Parses an uploaded Excel file to extract the student roster.
- * Looks for columns: "姓名" (Name) and optional "房號" (Room) or "學號" (ID).
+ * Looks for columns: "姓名", "性別", "房號".
  */
 export const parseRosterFile = async (file: File): Promise<OfficialStudent[]> => {
   return new Promise((resolve, reject) => {
@@ -21,8 +21,9 @@ export const parseRosterFile = async (file: File): Promise<OfficialStudent[]> =>
         
         // Map loose column names to strict interface
         const roster: OfficialStudent[] = json.map((row: any) => ({
-          // Try various common column headers for Name
+          // Try various common column headers
           name: (row['姓名'] || row['Name'] || row['學生姓名'] || '').toString().trim(),
+          gender: (row['性別'] || row['Gender'] || row['Sex'] || '').toString().trim(),
           originalRoom: (row['房號'] || row['Room'] || row['原寢室'] || '').toString().trim(),
           studentId: (row['學號'] || row['ID'] || '').toString().trim()
         })).filter(s => s.name.length > 0); // Filter out empty rows
@@ -39,16 +40,17 @@ export const parseRosterFile = async (file: File): Promise<OfficialStudent[]> =>
 
 /**
  * Downloads a template Excel file for the teacher to fill out.
+ * Simplified: Name, Gender, Room only.
  */
 export const downloadRosterTemplate = () => {
   const wb = XLSX.utils.book_new();
   
   // Create headers and some dummy example data
   const ws_data = [
-    ["姓名", "房號"], // Required Headers
-    ["王小明", "101"], // Example 1
-    ["陳大文", "102"], // Example 2
-    ["(請將範例資料刪除後，貼上您的學生名單)", ""] // Instruction
+    ["姓名", "性別", "房號"], // Required Headers
+    ["王小明", "男", "101"], // Example 1
+    ["陳小美", "女", "201"], // Example 2
+    ["(請將範例資料刪除後，貼上您的學生名單)", "", ""] // Instruction
   ];
   
   const ws = XLSX.utils.aoa_to_sheet(ws_data);
@@ -56,6 +58,7 @@ export const downloadRosterTemplate = () => {
   // Set column widths for better readability
   ws['!cols'] = [
     { wch: 15 }, // Name width
+    { wch: 10 }, // Gender width
     { wch: 10 }  // Room width
   ];
 
@@ -65,10 +68,6 @@ export const downloadRosterTemplate = () => {
 
 /**
  * Exports all system data into a comprehensive Excel file.
- * Sheets:
- * 1. 總表 (Overview): Name, Animal, Habits, RoommatePref, Status
- * 2. 分組結果 (Grouping): New Room, Name, Reason
- * 3. 原始問卷 (Raw Data): Name, Q1..Q11
  */
 export const exportDashboardToExcel = (students: StudentProfile[], groups: RoomGroup[], missingStudents: string[]) => {
   const wb = XLSX.utils.book_new();
@@ -76,6 +75,8 @@ export const exportDashboardToExcel = (students: StudentProfile[], groups: RoomG
   // --- SHEET 1: 學生概況 (Overview) ---
   const overviewData = students.map(s => ({
     "姓名": s.name,
+    "性別": s.gender || '-',
+    "房號": s.originalRoom || '-',
     "測驗結果": s.animalName,
     "指定室友": s.preferredRoommates ? s.preferredRoommates.join(", ") : '',
     "作息(睡覺)": s.habits.sleepTime,
@@ -88,6 +89,8 @@ export const exportDashboardToExcel = (students: StudentProfile[], groups: RoomG
   missingStudents.forEach(name => {
       overviewData.push({
           "姓名": name,
+          "性別": "-",
+          "房號": "-",
           "測驗結果": "尚未測驗",
           "指定室友": "-",
           "作息(睡覺)": "-",
@@ -109,6 +112,8 @@ export const exportDashboardToExcel = (students: StudentProfile[], groups: RoomG
               groupingData.push({
                   "分配寢室": g.roomId,
                   "姓名": s.name,
+                  "性別": s.gender || '-',
+                  "原房號": s.originalRoom || '-',
                   "動物人格": s.animalName,
                   "契合度": `${g.compatibilityScore}%`,
                   "分組理由": g.reason,

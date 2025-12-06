@@ -32,12 +32,13 @@ export interface QuizQuestion {
 export interface StudentProfile {
   id: string;
   name: string;
+  gender?: string; // Gender from roster (Male/Female)
+  originalRoom?: string; // Current room number from roster
   animalType: AnimalType;
   animalName: string; // Display name e.g., "夜貓子貓頭鷹"
-  description: string; // New: Personality analysis text
+  description: string; // Personality analysis text
   traits: string[];
-  preferredRoommates: string[]; // CHANGED: Now an array of strings
-  originalRoom?: string; // New: Current room number from roster
+  preferredRoommates: string[]; // Array of strings (Names or "續住" or "隨緣")
   habits: {
     sleepTime: string;
     cleanliness: number; // 1-10
@@ -55,11 +56,12 @@ export interface RoomGroup {
   potentialConflicts: string;
 }
 
-// New: Defines a student from the uploaded excel roster
+// Defines a student from the uploaded excel roster
 export interface OfficialStudent {
   name: string;
-  originalRoom?: string; // Optional: current room number
-  studentId?: string;    // Optional: student ID
+  gender?: string;       
+  originalRoom?: string; 
+  studentId?: string;    
 }
 
 export type ViewState = 'LANDING' | 'QUIZ' | 'RESULT' | 'TEACHER_DASHBOARD';
