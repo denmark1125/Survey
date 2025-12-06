@@ -1,3 +1,4 @@
+
 export enum AnimalType {
   OWL = 'OWL',       // Night owl
   LARK = 'LARK',     // Early bird
@@ -36,6 +37,7 @@ export interface StudentProfile {
   description: string; // New: Personality analysis text
   traits: string[];
   preferredRoommates: string[]; // CHANGED: Now an array of strings
+  originalRoom?: string; // New: Current room number from roster
   habits: {
     sleepTime: string;
     cleanliness: number; // 1-10

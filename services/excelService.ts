@@ -45,10 +45,10 @@ export const downloadRosterTemplate = () => {
   
   // Create headers and some dummy example data
   const ws_data = [
-    ["姓名", "房號", "學號"], // Required Headers
-    ["王小明", "101", "A112001"], // Example 1
-    ["陳大文", "102", "A112002"], // Example 2
-    ["(請將範例資料刪除後，貼上您的學生名單)", "", ""] // Instruction
+    ["姓名", "房號"], // Required Headers
+    ["王小明", "101"], // Example 1
+    ["陳大文", "102"], // Example 2
+    ["(請將範例資料刪除後，貼上您的學生名單)", ""] // Instruction
   ];
   
   const ws = XLSX.utils.aoa_to_sheet(ws_data);
@@ -56,8 +56,7 @@ export const downloadRosterTemplate = () => {
   // Set column widths for better readability
   ws['!cols'] = [
     { wch: 15 }, // Name width
-    { wch: 10 }, // Room width
-    { wch: 15 }  // ID width
+    { wch: 10 }  // Room width
   ];
 
   XLSX.utils.book_append_sheet(wb, ws, "名單匯入範本");

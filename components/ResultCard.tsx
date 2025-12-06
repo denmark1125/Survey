@@ -105,8 +105,8 @@ const ResultCard: React.FC<Props> = ({ profile, onRestart }) => {
           <div className="w-40 h-40 mx-auto mb-4 drop-shadow-xl transform hover:scale-105 transition-transform duration-500">
             {details.svg}
           </div>
-          {/* Added English Label for visual consistency with exported image */}
-          <div className="text-sm font-bold opacity-50 font-serif italic mb-1">{details.englishLabel}</div>
+          {/* Added English Label to UI */}
+          <div className="text-sm font-bold opacity-50 font-serif italic mb-1 tracking-widest">{details.englishLabel}</div>
           <h2 className="text-3xl font-black mb-1 tracking-tight text-gray-800">{profile.animalName}</h2>
           <div className="flex justify-center gap-2 mb-2">
             {profile.traits.slice(0, 2).map((t, i) => (
@@ -227,8 +227,8 @@ const ResultCard: React.FC<Props> = ({ profile, onRestart }) => {
                 
                 {/* Name & Type */}
                 <div className="text-center border-b-4 border-gray-100 pb-10">
-                    <div className="text-4xl font-bold text-gray-400 mb-2 font-serif italic">{details.englishLabel}</div>
-                    <h2 className="text-[100px] font-black mb-4" style={{color: details.themeColor ? details.themeColor.replace('100', '600') : '#333'}}>{profile.animalName}</h2>
+                    <div className="text-4xl font-bold text-gray-400 mb-2 font-serif italic tracking-widest">{details.englishLabel}</div>
+                    <h2 className="text-[100px] font-black mb-4" style={{color: details.themeColor}}>{profile.animalName}</h2>
                     <div className="flex justify-center gap-4">
                         {profile.traits.map((t, i) => (
                             <span key={i} className="px-8 py-3 bg-gray-100 text-gray-600 rounded-full text-3xl font-bold">#{t}</span>
@@ -267,11 +267,14 @@ const ResultCard: React.FC<Props> = ({ profile, onRestart }) => {
                 {/* Best Match (Big Section) */}
                 <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-[50px] p-8 flex items-center justify-between border-4 border-pink-100 mt-4">
                     <div className="pl-8">
-                         <div className="text-3xl font-bold text-pink-400 mb-2">BEST PARTNER</div>
+                         <div className="text-3xl font-bold text-pink-400 mb-2 tracking-widest">BEST PARTNER</div>
                          <div className="text-6xl font-black text-gray-700">{bestMatchDetails.label}</div>
                     </div>
-                    <div className="w-40 h-40 bg-white rounded-full p-4 shadow-sm border-4 border-white">
-                        {bestMatchDetails.svg}
+                    <div className="flex flex-col items-center">
+                        <div className="w-40 h-40 bg-white rounded-full p-4 shadow-sm border-4 border-white mb-2">
+                            {bestMatchDetails.svg}
+                        </div>
+                         <div className="text-xl font-bold text-gray-400">{bestMatchDetails.englishLabel}</div>
                     </div>
                 </div>
 

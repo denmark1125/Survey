@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Login from './Login';
 import StudentDetailModal from './StudentDetailModal';
@@ -107,11 +108,23 @@ const Dashboard: React.FC = () => {
         return;
       }
       setIsGrouping(true);
+
+      // Pre-processing: Merge originalRoom from officialRoster if available
+      // This is crucial for the "Preserve Existing Room" logic
+      const enhancedStudents = students.map(s => {
+          const rosterInfo = officialRoster.find(r => r.name.trim() === s.name.trim());
+          return {
+              ...s,
+              originalRoom: rosterInfo?.originalRoom || s.originalRoom
+          };
+      });
+
       setTimeout(() => {
           try {
-              const result = groupStudentsLocally(students);
+              const result = groupStudentsLocally(enhancedStudents);
               setGroups(result);
           } catch(e) {
+              console.error(e);
               alert("分組運算錯誤");
           } finally {
               setIsGrouping(false);
@@ -451,6 +464,7 @@ const Dashboard: React.FC = () => {
                             </div>
                             <div className="text-[10px] text-gray-400 font-medium flex items-center gap-2">
                                 <span className="bg-gray-100 px-1.5 rounded">{s.animalName}</span>
+                                {s.originalRoom && <span className="text-gray-300">| 原:{s.originalRoom}</span>}
                             </div>
                         </div>
                     </button>

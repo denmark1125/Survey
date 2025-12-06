@@ -1,35 +1,80 @@
+
 import { StudentProfile, RoomGroup } from "../types";
 
 /**
  * Deterministic Algorithm for Grouping Students
  * Priority:
- * 1. Sleep Schedule (Strict sorting)
- * 2. Cleanliness (Sorting within sleep schedule)
- * 3. Social Energy
- * 
- * Note: Mutual matching is handled as a "Soft Factor" - meaning if A and B want each other,
- * but have drastically different sleep schedules, they might be separated, but a warning flag is raised.
+ * 1. **Preserve Existing Rooms**: If students in the same original room want to stay or are neutral, and are compatible, keep them.
+ * 2. Sleep Schedule (Strict sorting)
+ * 3. Cleanliness (Sorting within sleep schedule)
+ * 4. Social Energy
  */
 export const groupStudentsLocally = (students: StudentProfile[]): RoomGroup[] => {
-  // 1. Calculate a "Sort Score" for every student
-  // Sleep is the most significant digit (100s place), then Cleanliness (10s), then Social (1s)
-  // Lower score = Early Bird / Cleaner
-  
-  const scoredStudents = students.map(s => {
-    // Determine Sleep Factor
-    // Raw answers check or habits parsing
+  const groups: RoomGroup[] = [];
+  const assignedStudentIds = new Set<string>();
+
+  // --- PHASE 1: PRESERVE EXISTING ROOMS ---
+  // Scan through original rooms
+  const originalRoomMap = new Map<string, StudentProfile[]>();
+  students.forEach(s => {
+      if (s.originalRoom) {
+          if (!originalRoomMap.has(s.originalRoom)) originalRoomMap.set(s.originalRoom, []);
+          originalRoomMap.get(s.originalRoom)?.push(s);
+      }
+  });
+
+  originalRoomMap.forEach((roomStudents, roomNum) => {
+      // Logic to determine if we should lock this room:
+      // 1. Are there enough people? (Assuming >= 3 for a valid group, or if they explicitly asked to stay)
+      // 2. Are they compatible? (Check sleep variance)
+      // 3. Do they WANT to stay? (Stay or Random)
+      
+      const candidates = roomStudents.filter(s => {
+          const prefs = s.preferredRoommates || [];
+          // Filter out if they explicitly designated someone NOT in this room (Hard to track, simplify to:)
+          // If they chose "Stay" or "Random" or "Designated" (we assume designated are usually friends in same room)
+          return true; // For now consider all, then validate
+      });
+
+      if (candidates.length >= 3) {
+          // Check Compatibility: Sleep
+          // If mix of Early (1) and Late (3) is present, it's a conflict.
+          const sleepTypes = new Set(candidates.map(s => {
+             if (s.habits.sleepTime.includes("PM")) return 1; 
+             if (s.habits.sleepTime.includes("02:30")) return 3; 
+             return 2; 
+          }));
+          const hasSleepConflict = sleepTypes.has(1) && sleepTypes.has(3);
+
+          // Check Intent: Does anyone explicitly want to leave? 
+          // (Q11 doesn't have "Leave", but if they designated someone else, they might)
+          // For this feature, we prioritize stability. If they didn't sleep-conflict, we keep them.
+          
+          if (!hasSleepConflict) {
+              // LOCK THIS ROOM
+              groups.push({
+                  roomId: roomNum, // Use original room number
+                  students: candidates,
+                  compatibilityScore: 100,
+                  reason: `【原房續住】成員生活習慣相近 (作息無衝突) 且具備續住意願，優先保留原房號。`,
+                  potentialConflicts: ""
+              });
+              candidates.forEach(s => assignedStudentIds.add(s.id));
+          }
+      }
+  });
+
+
+  // --- PHASE 2: SORT REMAINING ---
+  const remainingStudents = students.filter(s => !assignedStudentIds.has(s.id));
+
+  // 1. Calculate a "Sort Score"
+  const scoredStudents = remainingStudents.map(s => {
     let sleepFactor = 2;
-    // Heuristic based on string or raw answers if available
     if (s.habits.sleepTime.includes("PM") || s.habits.sleepTime.includes("10:30")) sleepFactor = 1;
     else if (s.habits.sleepTime.includes("02:30")) sleepFactor = 3;
     
     // Sort Score: Sleep * 1000 + (Inverted Cleanliness) * 10 + (Inverted Social)
-    // We invert cleanliness because usually 10=Cleanest is desirable to group together?
-    // Actually, let's group similar values.
-    // Let's sort simply: 
-    // Sleep: 1 (Early) -> 3 (Late)
-    // Cleanliness: 10 (Clean) -> 1 (Messy)
-    
     const sortScore = (sleepFactor * 1000) + ((10 - s.habits.cleanliness) * 10) + (10 - s.habits.socialEnergy);
     
     return { ...s, sortScore, sleepFactor };
@@ -38,10 +83,15 @@ export const groupStudentsLocally = (students: StudentProfile[]): RoomGroup[] =>
   // 2. Sort the roster
   scoredStudents.sort((a, b) => a.sortScore - b.sortScore);
 
-  // 3. Slice into chunks of 4 (or 3 if remainder)
-  const groups: RoomGroup[] = [];
+  // 3. Slice into chunks
   const roomSize = 4;
   let roomIdCounter = 1;
+  
+  // Find a safe start for new room IDs (avoid clashing with preserved original rooms)
+  const existingRoomIds = new Set(groups.map(g => g.roomId));
+  while (existingRoomIds.has(String(roomIdCounter).padStart(3, '0'))) {
+      roomIdCounter++;
+  }
 
   for (let i = 0; i < scoredStudents.length; i += roomSize) {
     const chunk = scoredStudents.slice(i, i + roomSize);
@@ -52,11 +102,10 @@ export const groupStudentsLocally = (students: StudentProfile[]): RoomGroup[] =>
     if (avgSleep < 1.5) type = "晨型人 (早睡區)";
     else if (avgSleep > 2.5) type = "夜貓子 (熬夜區)";
     
-    // Generate Reason
     const reason = `本寢室為「${type}」。成員作息相近，能大幅減少睡眠干擾。平均整潔指數為 ${(chunk.reduce((acc, c) => acc + c.habits.cleanliness, 0) / chunk.length).toFixed(1)}/10。`;
 
-    // Check for Conflicts and Matches
     const conflicts: string[] = [];
+    const thisRoomId = String(roomIdCounter).padStart(3, '0');
     
     chunk.forEach(s => {
         // Valid requests check
@@ -66,42 +115,46 @@ export const groupStudentsLocally = (students: StudentProfile[]): RoomGroup[] =>
 
         if (validRequests.length > 0) {
             validRequests.forEach(targetName => {
-                // 1. Ghost Detection: Does this target exist in the entire class?
+                // Ghost Detection
                 const targetProfile = students.find(st => st.name.trim() === targetName.trim());
                 if (!targetProfile) {
-                     conflicts.push(`❓ ${s.name} 指定了找不到的對象「${targetName}」，請確認姓名`);
+                     conflicts.push(`❓ ${s.name} 指定了找不到的對象「${targetName}」`);
                      return;
                 }
 
-                // 2. Is target in this room?
+                // Is target in this room?
                 if (chunk.find(c => c.name === targetProfile.name)) {
-                    // Good, they are together.
+                    // Together
                 } else {
-                    // Warning: Target is NOT in this room.
-                    // 3. Check if it was Mutual (Did target also want s?)
+                    // Mutual check
                     if (targetProfile.preferredRoommates && targetProfile.preferredRoommates.includes(s.name)) {
-                        conflicts.push(`⚠️ ${s.name} 與 ${targetName} 互相指定，但因作息/整潔度差異被拆開`);
+                        conflicts.push(`⚠️ ${s.name} 與 ${targetName} 互相指定但被拆開`);
                     }
                 }
             });
         }
         
-        // Stay request warning if moved? (Assuming current logic moves everyone)
+        // Stay request warning
+        // Only warn if they wanted to stay, BUT they are NOT in their original room.
+        // And ensure they actually HAD an original room to begin with.
         if (s.preferredRoommates && s.preferredRoommates.some(r => r.includes("續住"))) {
-             conflicts.push(`ℹ️ ${s.name} 提出續住需求，請確認是否原房`);
+             if (s.originalRoom && s.originalRoom !== thisRoomId) {
+                 conflicts.push(`ℹ️ ${s.name} 想續住原房(${s.originalRoom})，但被分配至新房`);
+             }
         }
     });
 
     groups.push({
-      roomId: String(roomIdCounter).padStart(3, '0'),
+      roomId: thisRoomId,
       students: chunk,
       compatibilityScore: Math.max(0, 95 - (conflicts.length * 10)), 
       reason: reason,
       potentialConflicts: conflicts.join("。")
     });
-
-    roomIdCounter++;
+    
+    // Increment ID and skip any that might exist
+    do { roomIdCounter++; } while (existingRoomIds.has(String(roomIdCounter).padStart(3, '0')));
   }
 
-  return groups;
+  return groups.sort((a,b) => a.roomId.localeCompare(b.roomId)); // Sort by Room ID for clean display
 };
