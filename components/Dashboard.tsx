@@ -4,7 +4,7 @@ import Login from './Login';
 import StudentDetailModal from './StudentDetailModal';
 import { generateRoomGroups, generateMockStudents } from '../services/geminiService';
 import { groupStudentsLocally } from '../services/localGroupingService';
-import { fetchClassroomData, clearDatabase, deleteStudent, updateStudentName, updateStudentGender } from '../services/dbService';
+import { fetchClassroomData, clearDatabase, deleteStudent, updateStudentName, updateStudentGender, saveOfficialRoster, fetchOfficialRoster } from '../services/dbService';
 import { parseRosterFile, exportDashboardToExcel, downloadRosterTemplate } from '../services/excelService';
 import { StudentProfile, RoomGroup, AnimalType, OfficialStudent } from '../types';
 import { ANIMAL_DETAILS } from '../constants';
@@ -81,9 +81,17 @@ const Dashboard: React.FC = () => {
     setIsSyncing(true);
     setSyncError('');
     try {
-        const cloudData = await fetchClassroomData();
-        setStudents(cloudData);
+        // Fetch both students AND the official roster from cloud
+        const [cloudStudents, cloudRoster] = await Promise.all([
+            fetchClassroomData(),
+            fetchOfficialRoster()
+        ]);
+        
+        setStudents(cloudStudents);
+        setOfficialRoster(cloudRoster);
+        
         setLastUpdated(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }));
+        console.log("Synced successfully. Students:", cloudStudents.length, "Roster:", cloudRoster.length);
     } catch (e: any) {
         setSyncError(e.message || '讀取失敗');
         console.error("Sync failed", e);
@@ -241,14 +249,19 @@ const Dashboard: React.FC = () => {
       if (!file) return;
       
       try {
+          setIsSyncing(true); // Show loading
           const roster = await parseRosterFile(file);
+          
+          // SAVE TO CLOUD IMMEDIATELY
+          await saveOfficialRoster(roster);
           setOfficialRoster(roster);
-          // Persist to local storage so it survives refresh
-          localStorage.setItem('officialRoster', JSON.stringify(roster));
-          alert(`成功匯入 ${roster.length} 筆名單資料`);
+          
+          alert(`成功匯入 ${roster.length} 筆名單資料並同步至雲端`);
       } catch (error) {
-          alert("Excel 讀取失敗，請確認格式正確 (需包含 '姓名' 欄位)");
+          alert("Excel 讀取或上傳失敗");
           console.error(error);
+      } finally {
+          setIsSyncing(false);
       }
       // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -263,24 +276,6 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (isLoggedIn) {
         handleSync();
-    }
-  }, [isLoggedIn]);
-
-  // 2. Load Saved Roster from LocalStorage (Independent Effect)
-  useEffect(() => {
-    if (isLoggedIn) {
-        const savedRoster = localStorage.getItem('officialRoster');
-        if (savedRoster) {
-            try {
-                const parsed = JSON.parse(savedRoster);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    setOfficialRoster(parsed);
-                    console.log("Loaded persisted roster:", parsed.length);
-                }
-            } catch(e) { 
-                console.error("Failed to load roster from storage"); 
-            }
-        }
     }
   }, [isLoggedIn]);
 
@@ -383,7 +378,7 @@ const Dashboard: React.FC = () => {
                     </button>
                  </div>
 
-                 {/* Progress Info - Persists now due to localStorage loading */}
+                 {/* Progress Info - Persists from Cloud */}
                  {officialRoster.length > 0 && (
                      <div className="flex flex-col animate-in fade-in slide-in-from-right-4">
                          <div className="flex items-center gap-2 text-sm font-bold text-gray-600">

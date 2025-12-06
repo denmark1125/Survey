@@ -1,8 +1,10 @@
 import { db } from '../firebaseConfig';
-import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc } from 'firebase/firestore';
-import { StudentProfile } from '../types';
+import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, setDoc, getDoc } from 'firebase/firestore';
+import { StudentProfile, OfficialStudent } from '../types';
 
 const COLLECTION_NAME = 'students';
+const SETTINGS_COLLECTION = 'settings';
+const ROSTER_DOC_ID = 'class_roster';
 
 /**
  * CRITICAL HELPER: 
@@ -95,6 +97,48 @@ export const fetchClassroomData = async (): Promise<StudentProfile[]> => {
     throw new Error("無法讀取雲端資料，請檢查網路");
   }
 };
+
+/**
+ * Save the Official Roster to Cloud (Syncs across devices)
+ */
+export const saveOfficialRoster = async (roster: OfficialStudent[]): Promise<void> => {
+    if (!db) return;
+    try {
+        const docRef = doc(db, SETTINGS_COLLECTION, ROSTER_DOC_ID);
+        const cleanRoster = sanitizeData(roster);
+        // Overwrite the existing roster
+        await setDoc(docRef, { 
+            students: cleanRoster,
+            updatedAt: new Date().toISOString()
+        });
+        console.log("Roster synced to cloud");
+    } catch (e) {
+        console.error("Error saving roster:", e);
+        throw new Error("名單上傳雲端失敗");
+    }
+};
+
+/**
+ * Fetch the Official Roster from Cloud
+ */
+export const fetchOfficialRoster = async (): Promise<OfficialStudent[]> => {
+    if (!db) return [];
+    try {
+        const docRef = doc(db, SETTINGS_COLLECTION, ROSTER_DOC_ID);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            return data.students as OfficialStudent[] || [];
+        } else {
+            return [];
+        }
+    } catch (e) {
+        console.error("Error fetching roster:", e);
+        return [];
+    }
+};
+
 
 /**
  * Delete a single student by ID

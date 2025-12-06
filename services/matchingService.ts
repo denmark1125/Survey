@@ -80,7 +80,24 @@ export const calculateCompatibility = (s1: StudentProfile, s2: StudentProfile): 
  * Finds the top 3 matches and bottom 1 match for a specific student.
  */
 export const findBestMatches = (target: StudentProfile, allStudents: StudentProfile[]) => {
-  const candidates = allStudents.filter(s => s.id !== target.id);
+  // GENDER FILTER: Only match with same gender (or Unknown if Unknown)
+  const candidates = allStudents.filter(s => {
+      if (s.id === target.id) return false;
+      
+      const normalize = (g?: string) => {
+          if (!g) return 'U';
+          const u = g.toUpperCase();
+          if (u.startsWith('M') || u.includes('男')) return 'M';
+          if (u.startsWith('F') || u.includes('女')) return 'F';
+          return 'U';
+      };
+
+      const targetG = normalize(target.gender);
+      const candidateG = normalize(s.gender);
+
+      if (targetG === 'U' || candidateG === 'U') return true; // Allow matching if gender is missing
+      return targetG === candidateG; // Strict same-sex matching
+  });
   
   const scored = candidates.map(c => ({
     student: c,
