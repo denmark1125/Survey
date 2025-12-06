@@ -99,7 +99,7 @@ export const groupStudentsLocally = (allStudents: StudentProfile[]): RoomGroup[]
         const groups: RoomGroup[] = [];
         let remaining = [...students];
 
-        // --- PHASE 1: PRESERVE EXISTING ROOMS ---
+        // --- PHASE 1: PRESERVE EXISTING ROOMS (續住優先) ---
         // Group by original room
         const roomMap = new Map<string, StudentProfile[]>();
         remaining.forEach(s => {
@@ -114,12 +114,8 @@ export const groupStudentsLocally = (allStudents: StudentProfile[]): RoomGroup[]
             // Only try to preserve if we have enough people (e.g. at least 2)
             if (occupants.length >= 2) { 
                 
-                // For simplicity & robustness: 
-                // We preserve the subset of occupants who:
-                // 1. Want to "Stay" OR
-                // 2. Are "Neutral/Random" OR
-                // 3. Designated someone who IS ALSO in the room.
-                
+                // Filter who wants to stay or is neutral
+                // Also include if they designated someone in this room
                 const candidates = occupants.filter(s => {
                     const prefs = s.preferredRoommates || [];
                     const wantsToStay = prefs.some(r => r.includes("續住") || r.includes("不"));
@@ -129,13 +125,11 @@ export const groupStudentsLocally = (allStudents: StudentProfile[]): RoomGroup[]
                     const designatedNames = prefs.filter(r => !r.includes("續住") && !r.includes("不") && !r.includes("無 (隨緣)"));
                     const designatedInRoom = designatedNames.length > 0 && designatedNames.every(name => occupants.some(o => o.name === name));
                     
-                    // If they designated someone, they only stay if that person is here. 
-                    // If they didn't designate anyone, they stay if they are neutral or explicitly want to stay.
                     return wantsToStay || isNeutral || designatedInRoom;
                 });
 
-                // --- REVISED LOGIC: PRESERVE EVEN IF SCORE IS LOW ---
-                // If candidates >= 2, we lock them in to respect their wish to stay (or lack of wish to move).
+                // --- KEY LOGIC UPDATE: NEVER SPLIT IF THEY WANT TO STAY ---
+                // If candidates >= 2, we lock them in.
                 if (candidates.length >= 2) {
                      const score = calculateScore(candidates, true);
                      let reason = `【原房續住】保留原寢室 ${roomId} 成員 (${candidates.length}人)`;
@@ -144,14 +138,15 @@ export const groupStudentsLocally = (allStudents: StudentProfile[]): RoomGroup[]
                      // Compatibility Check (Threshold: 60)
                      if (score < 60) {
                          reason += " (⚠️ 契合度偏低)";
-                         warnings = `⚠️ 注意：雖然學生選擇續住，但生活習慣契合度僅 ${score}%，未來可能產生摩擦。`;
+                         // We DO NOT split them, but we add a warning for the teacher.
+                         warnings = `⚠️ 注意：雖然學生選擇續住，但生活習慣差異大 (契合度 ${score}%)，建議持續關注。`;
                          
                          // Add specific conflict details
                          const hasEarly = candidates.some(s => s.habits.sleepTime.includes("PM"));
                          const hasLate = candidates.some(s => s.habits.sleepTime.includes("AM"));
-                         if (hasEarly && hasLate) warnings += " (作息衝突)";
+                         if (hasEarly && hasLate) warnings += " (作息衝突: 早睡 vs 熬夜)";
                      } else {
-                         reason += " - 生活習慣契合";
+                         reason += " - 生活習慣相容";
                      }
 
                      groups.push({
@@ -162,7 +157,7 @@ export const groupStudentsLocally = (allStudents: StudentProfile[]): RoomGroup[]
                         potentialConflicts: warnings
                      });
                      
-                     // Remove from remaining
+                     // Remove from remaining pool
                      remaining = remaining.filter(s => !candidates.includes(s));
                 }
             }

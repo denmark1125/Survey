@@ -17,13 +17,14 @@ const Dashboard: React.FC = () => {
   
   // Roster Management State
   const [officialRoster, setOfficialRoster] = useState<OfficialStudent[]>([]);
+  const [rosterUpdatedAt, setRosterUpdatedAt] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Status states
   const [isSyncing, setIsSyncing] = useState(false);
   const [isGrouping, setIsGrouping] = useState(false);
   const [syncError, setSyncError] = useState('');
-  const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [lastSyncedTime, setLastSyncedTime] = useState<string>('');
   const [filterTab, setFilterTab] = useState<'ALL' | 'DESIGNATED' | 'STAY' | 'MISSING'>('ALL');
 
   // Modal State
@@ -82,16 +83,19 @@ const Dashboard: React.FC = () => {
     setSyncError('');
     try {
         // Fetch both students AND the official roster from cloud
-        const [cloudStudents, cloudRoster] = await Promise.all([
+        const [cloudStudents, rosterData] = await Promise.all([
             fetchClassroomData(),
             fetchOfficialRoster()
         ]);
         
         setStudents(cloudStudents);
-        setOfficialRoster(cloudRoster);
+        setOfficialRoster(rosterData.students);
+        if (rosterData.updatedAt) {
+            setRosterUpdatedAt(new Date(rosterData.updatedAt).toLocaleString('zh-TW', { hour12: false }));
+        }
         
-        setLastUpdated(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }));
-        console.log("Synced successfully. Students:", cloudStudents.length, "Roster:", cloudRoster.length);
+        setLastSyncedTime(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }));
+        console.log("Synced successfully. Students:", cloudStudents.length, "Roster:", rosterData.students.length);
     } catch (e: any) {
         setSyncError(e.message || '讀取失敗');
         console.error("Sync failed", e);
@@ -119,7 +123,7 @@ const Dashboard: React.FC = () => {
       }
       setIsGrouping(true);
 
-      // Helper to clean strings
+      // Helper to clean strings (Remove ALL spaces)
       const normalize = (n: string) => n.replace(/\s+/g, '').toLowerCase();
 
       // Pre-processing: Merge originalRoom AND GENDER from officialRoster if available
@@ -252,11 +256,14 @@ const Dashboard: React.FC = () => {
           setIsSyncing(true); // Show loading
           const roster = await parseRosterFile(file);
           
-          // SAVE TO CLOUD IMMEDIATELY
+          // SAVE TO CLOUD IMMEDIATELY (Overwrite old)
           await saveOfficialRoster(roster);
-          setOfficialRoster(roster);
           
-          alert(`成功匯入 ${roster.length} 筆名單資料並同步至雲端`);
+          setOfficialRoster(roster);
+          // Update the "Last Updated" display immediately
+          setRosterUpdatedAt(new Date().toLocaleString('zh-TW', { hour12: false }));
+          
+          alert(`成功匯入 ${roster.length} 筆名單資料並同步至雲端 (已覆蓋舊資料)`);
       } catch (error) {
           alert("Excel 讀取或上傳失敗");
           console.error(error);
@@ -306,9 +313,9 @@ const Dashboard: React.FC = () => {
                     <div className={`w-2 h-2 rounded-full ${students.length > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`}></div>
                     <span>測驗人數: <b className="text-gray-900">{students.length}</b> 人</span>
                 </div>
-                {lastUpdated && (
+                {lastSyncedTime && (
                     <p className="text-gray-400 text-xs flex items-center gap-1">
-                        <Clock size={12} /> 更新: {lastUpdated}
+                        <Clock size={12} /> 資料同步: {lastSyncedTime}
                     </p>
                 )}
             </div>
@@ -352,30 +359,38 @@ const Dashboard: React.FC = () => {
         <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
              <div className="flex items-center gap-4 w-full md:w-auto flex-wrap">
                  {/* Upload */}
-                 <div className="flex gap-2 items-center">
-                    <div className="relative">
-                        <input 
-                            type="file" 
-                            ref={fileInputRef}
-                            onChange={handleFileUpload}
-                            accept=".xlsx, .xls"
-                            className="hidden"
-                        />
+                 <div className="flex flex-col gap-1">
+                    <div className="flex gap-2 items-center">
+                        <div className="relative">
+                            <input 
+                                type="file" 
+                                ref={fileInputRef}
+                                onChange={handleFileUpload}
+                                accept=".xlsx, .xls"
+                                className="hidden"
+                            />
+                            <button 
+                                onClick={() => fileInputRef.current?.click()}
+                                className="px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 rounded-lg font-bold flex items-center gap-2 transition-all shadow-sm"
+                            >
+                                <Upload size={18} /> 上傳名單 (Excel)
+                            </button>
+                        </div>
+                        {/* Template Download */}
                         <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 rounded-lg font-bold flex items-center gap-2 transition-all shadow-sm"
+                            onClick={downloadRosterTemplate}
+                            className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-200 transition-colors"
+                            title="下載Excel範本 (姓名/性別/房號)"
                         >
-                            <Upload size={18} /> 上傳名單 (Excel)
+                            <Download size={18} />
                         </button>
                     </div>
-                    {/* Template Download */}
-                    <button 
-                        onClick={downloadRosterTemplate}
-                        className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-200 transition-colors"
-                        title="下載Excel範本 (姓名/性別/房號)"
-                    >
-                        <Download size={18} />
-                    </button>
+                    {/* Timestamp Display */}
+                    {rosterUpdatedAt && (
+                        <div className="text-[10px] text-gray-400 pl-1">
+                            📅 名單更新於: {rosterUpdatedAt}
+                        </div>
+                    )}
                  </div>
 
                  {/* Progress Info - Persists from Cloud */}

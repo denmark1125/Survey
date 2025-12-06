@@ -28,17 +28,15 @@ export const parseRosterFile = async (file: File): Promise<OfficialStudent[]> =>
           const nameKey = getKey(['姓名', 'Name', '學生姓名']);
           const genderKey = getKey(['性別', 'Gender', 'Sex', '生理性別']);
           const roomKey = getKey(['房號', 'Room', '原寢室', '寢室']);
-          const idKey = getKey(['學號', 'ID']);
 
           // Helper to strictly clean strings (remove ALL spaces, including invisible ones)
           const cleanStr = (val: any) => (val || '').toString().replace(/\s+/g, '').trim();
-          const cleanName = (val: any) => (val || '').toString().trim(); // Keep spaces in names? Usually removing them is safer for matching.
+          const cleanName = (val: any) => (val || '').toString().trim(); 
 
           return {
-            name: cleanName(nameKey ? row[nameKey] : ''), // Basic trim for name to keep readability if intended, but Dashboard does strict match
+            name: cleanName(nameKey ? row[nameKey] : ''), 
             gender: cleanStr(genderKey ? row[genderKey] : ''),
             originalRoom: cleanStr(roomKey ? row[roomKey] : ''),
-            studentId: cleanStr(idKey ? row[idKey] : '')
           };
         }).filter(s => s.name.length > 0); // Filter out empty rows
 
