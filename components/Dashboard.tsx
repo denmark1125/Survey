@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Login from './Login';
 import StudentDetailModal from './StudentDetailModal';
@@ -51,11 +52,12 @@ const Dashboard: React.FC = () => {
   const missingStudents = useMemo(() => {
       if (officialRoster.length === 0) return [];
       
-      // Normalize names for comparison (remove spaces, lowercase)
-      const takenQuizNames = new Set(students.map(s => s.name.replace(/\s/g, '').toLowerCase()));
+      // Normalize names for comparison (remove ALL spaces, lowercase)
+      const normalize = (n: string) => n.replace(/\s+/g, '').toLowerCase();
+      const takenQuizNames = new Set(students.map(s => normalize(s.name)));
       
       return officialRoster.filter(official => {
-          const normalizedOfficial = official.name.replace(/\s/g, '').toLowerCase();
+          const normalizedOfficial = normalize(official.name);
           return !takenQuizNames.has(normalizedOfficial);
       });
   }, [students, officialRoster]);
@@ -109,18 +111,22 @@ const Dashboard: React.FC = () => {
       }
       setIsGrouping(true);
 
+      // Helper to clean strings
+      const normalize = (n: string) => n.replace(/\s+/g, '').toLowerCase();
+
       // Pre-processing: Merge originalRoom AND GENDER from officialRoster if available
-      // ROBUST NAME MATCHING: Remove spaces and lowercase
       const enhancedStudents = students.map(s => {
-          const normalizedStudentName = s.name.replace(/\s/g, '').toLowerCase();
+          const normalizedStudentName = normalize(s.name);
           
           const rosterInfo = officialRoster.find(r => 
-              r.name.replace(/\s/g, '').toLowerCase() === normalizedStudentName
+              normalize(r.name) === normalizedStudentName
           );
           
           return {
               ...s,
               originalRoom: rosterInfo?.originalRoom || s.originalRoom,
+              // PRIORITY: Roster > DB (unless Unknown)
+              // If roster has valid gender, use it. Otherwise fall back to DB.
               gender: rosterInfo?.gender || s.gender || "Unknown"
           };
       });
@@ -191,7 +197,7 @@ const Dashboard: React.FC = () => {
       const newName = prompt("請輸入新的姓名 (系統將自動去除空白):", currentName);
       
       if (newName && newName.trim() !== currentName) {
-          const cleanName = newName.replace(/\s/g, ''); // Remove all spaces
+          const cleanName = newName.replace(/\s+/g, ''); // Remove all spaces
           try {
               await updateStudentName(id, cleanName);
               // Update local state
@@ -237,6 +243,8 @@ const Dashboard: React.FC = () => {
       try {
           const roster = await parseRosterFile(file);
           setOfficialRoster(roster);
+          // Persist to local storage so it survives refresh
+          localStorage.setItem('officialRoster', JSON.stringify(roster));
           alert(`成功匯入 ${roster.length} 筆名單資料`);
       } catch (error) {
           alert("Excel 讀取失敗，請確認格式正確 (需包含 '姓名' 欄位)");
@@ -251,10 +259,28 @@ const Dashboard: React.FC = () => {
       exportDashboardToExcel(students, groups, missingNames);
   };
 
-  // Auto-sync when logged in
+  // 1. Auto-sync Data from Cloud when logged in
   useEffect(() => {
     if (isLoggedIn) {
         handleSync();
+    }
+  }, [isLoggedIn]);
+
+  // 2. Load Saved Roster from LocalStorage (Independent Effect)
+  useEffect(() => {
+    if (isLoggedIn) {
+        const savedRoster = localStorage.getItem('officialRoster');
+        if (savedRoster) {
+            try {
+                const parsed = JSON.parse(savedRoster);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    setOfficialRoster(parsed);
+                    console.log("Loaded persisted roster:", parsed.length);
+                }
+            } catch(e) { 
+                console.error("Failed to load roster from storage"); 
+            }
+        }
     }
   }, [isLoggedIn]);
 
@@ -357,9 +383,9 @@ const Dashboard: React.FC = () => {
                     </button>
                  </div>
 
-                 {/* Progress Info */}
+                 {/* Progress Info - Persists now due to localStorage loading */}
                  {officialRoster.length > 0 && (
-                     <div className="flex flex-col">
+                     <div className="flex flex-col animate-in fade-in slide-in-from-right-4">
                          <div className="flex items-center gap-2 text-sm font-bold text-gray-600">
                             <span>完成度: {students.length} / {officialRoster.length}</span>
                             {missingStudents.length > 0 ? (
@@ -493,13 +519,9 @@ const Dashboard: React.FC = () => {
               ) : (
                 filteredStudents.map((s) => {
                   // Re-calculate enhanced data locally for display consistency if needed
-                  const normalizedName = s.name.replace(/\s/g, '').toLowerCase();
-                  const rosterMatch = officialRoster.find(r => r.name.replace(/\s/g, '').toLowerCase() === normalizedName);
+                  const normalizedName = s.name.replace(/\s+/g, '').toLowerCase();
+                  const rosterMatch = officialRoster.find(r => r.name.replace(/\s+/g, '').toLowerCase() === normalizedName);
                   // Prefer Roster gender, then DB gender. 
-                  // If user manually updates DB gender (s.gender), we want that to show if Roster is missing or if we want to trust DB.
-                  // However, logic here usually implies Roster is the single source of truth for gender.
-                  // But if Roster fails to parse, we want the Manual Override (s.gender) to work.
-                  // If roster has "Unknown", we prefer s.gender if it is M/F.
                   const rosterG = rosterMatch?.gender;
                   let displayGender = s.gender || "Unknown";
                   

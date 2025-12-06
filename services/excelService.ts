@@ -1,3 +1,4 @@
+
 import * as XLSX from 'xlsx';
 import { OfficialStudent, StudentProfile, RoomGroup } from '../types';
 
@@ -29,11 +30,15 @@ export const parseRosterFile = async (file: File): Promise<OfficialStudent[]> =>
           const roomKey = getKey(['房號', 'Room', '原寢室', '寢室']);
           const idKey = getKey(['學號', 'ID']);
 
+          // Helper to strictly clean strings (remove ALL spaces, including invisible ones)
+          const cleanStr = (val: any) => (val || '').toString().replace(/\s+/g, '').trim();
+          const cleanName = (val: any) => (val || '').toString().trim(); // Keep spaces in names? Usually removing them is safer for matching.
+
           return {
-            name: (nameKey ? row[nameKey] : '').toString().trim(),
-            gender: (genderKey ? row[genderKey] : '').toString().trim(),
-            originalRoom: (roomKey ? row[roomKey] : '').toString().trim(),
-            studentId: (idKey ? row[idKey] : '').toString().trim()
+            name: cleanName(nameKey ? row[nameKey] : ''), // Basic trim for name to keep readability if intended, but Dashboard does strict match
+            gender: cleanStr(genderKey ? row[genderKey] : ''),
+            originalRoom: cleanStr(roomKey ? row[roomKey] : ''),
+            studentId: cleanStr(idKey ? row[idKey] : '')
           };
         }).filter(s => s.name.length > 0); // Filter out empty rows
 

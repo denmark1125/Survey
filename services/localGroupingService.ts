@@ -5,7 +5,7 @@ import { ANIMAL_DETAILS } from "../constants";
 // Helper to normalize gender strings
 const normalizeGender = (g?: string): 'M' | 'F' | 'U' => {
     if (!g) return 'U';
-    const s = g.trim().toUpperCase();
+    const s = g.replace(/\s+/g, '').trim().toUpperCase(); // Strict clean
     if (['M', 'MALE', 'BOY', '男', '男生'].includes(s)) return 'M';
     if (['F', 'FEMALE', 'GIRL', '女', '女生'].includes(s)) return 'F';
     return 'U';
@@ -111,25 +111,59 @@ export const groupStudentsLocally = (allStudents: StudentProfile[]): RoomGroup[]
 
         // Evaluate each existing room
         roomMap.forEach((occupants, roomId) => {
-            if (occupants.length >= 3) { // Only preserve if enough people
-                // Check if they want to stay or don't care
-                const stayVotes = occupants.filter(s => 
-                    s.preferredRoommates?.some(r => r.includes("續住") || r.includes("不")) || 
-                    s.preferredRoommates?.includes("無 (隨緣)") ||
-                    (!s.preferredRoommates || s.preferredRoommates.length === 0)
-                ).length;
+            // Only try to preserve if we have enough people (e.g. at least 2)
+            if (occupants.length >= 2) { 
                 
-                // If majority implies staying, lock them
-                if (stayVotes >= occupants.length / 2) {
-                    groups.push({
+                // For simplicity & robustness: 
+                // We preserve the subset of occupants who:
+                // 1. Want to "Stay" OR
+                // 2. Are "Neutral/Random" OR
+                // 3. Designated someone who IS ALSO in the room.
+                
+                const candidates = occupants.filter(s => {
+                    const prefs = s.preferredRoommates || [];
+                    const wantsToStay = prefs.some(r => r.includes("續住") || r.includes("不"));
+                    const isNeutral = prefs.includes("無 (隨緣)") || prefs.length === 0;
+                    
+                    // Specific names designated
+                    const designatedNames = prefs.filter(r => !r.includes("續住") && !r.includes("不") && !r.includes("無 (隨緣)"));
+                    const designatedInRoom = designatedNames.length > 0 && designatedNames.every(name => occupants.some(o => o.name === name));
+                    
+                    // If they designated someone, they only stay if that person is here. 
+                    // If they didn't designate anyone, they stay if they are neutral or explicitly want to stay.
+                    return wantsToStay || isNeutral || designatedInRoom;
+                });
+
+                // --- REVISED LOGIC: PRESERVE EVEN IF SCORE IS LOW ---
+                // If candidates >= 2, we lock them in to respect their wish to stay (or lack of wish to move).
+                if (candidates.length >= 2) {
+                     const score = calculateScore(candidates, true);
+                     let reason = `【原房續住】保留原寢室 ${roomId} 成員 (${candidates.length}人)`;
+                     let warnings = "";
+                     
+                     // Compatibility Check (Threshold: 60)
+                     if (score < 60) {
+                         reason += " (⚠️ 契合度偏低)";
+                         warnings = `⚠️ 注意：雖然學生選擇續住，但生活習慣契合度僅 ${score}%，未來可能產生摩擦。`;
+                         
+                         // Add specific conflict details
+                         const hasEarly = candidates.some(s => s.habits.sleepTime.includes("PM"));
+                         const hasLate = candidates.some(s => s.habits.sleepTime.includes("AM"));
+                         if (hasEarly && hasLate) warnings += " (作息衝突)";
+                     } else {
+                         reason += " - 生活習慣契合";
+                     }
+
+                     groups.push({
                         roomId: roomId, // Keep original room ID (e.g., 101)
-                        students: occupants,
-                        compatibilityScore: calculateScore(occupants, true), // Pass true for preserved room bonus
-                        reason: `【原房續住】保留原寢室 ${roomId} 成員 (${occupants.length}人)`,
-                        potentialConflicts: ""
-                    });
-                    // Remove form remaining
-                    remaining = remaining.filter(s => !occupants.includes(s));
+                        students: candidates,
+                        compatibilityScore: score,
+                        reason: reason,
+                        potentialConflicts: warnings
+                     });
+                     
+                     // Remove from remaining
+                     remaining = remaining.filter(s => !candidates.includes(s));
                 }
             }
         });
