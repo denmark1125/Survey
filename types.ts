@@ -34,6 +34,7 @@ export interface StudentProfile {
   name: string;
   gender?: string; // Gender from roster (Male/Female)
   originalRoom?: string; // Current room number from roster
+  finalRoom?: string; // Final confirmed room number by teacher
   animalType: AnimalType;
   animalName: string; // Display name e.g., "夜貓子貓頭鷹"
   description: string; // Personality analysis text
@@ -61,6 +62,7 @@ export interface OfficialStudent {
   name: string;
   gender?: string;       
   originalRoom?: string; 
+  finalRoom?: string; // Allow importing final decisions
   studentId?: string;    
 }
 

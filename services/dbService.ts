@@ -185,6 +185,36 @@ export const updateStudentGender = async (id: string, newGender: string): Promis
 };
 
 /**
+ * Update a student's final confirmed room number
+ */
+export const updateStudentFinalRoom = async (id: string, finalRoom: string): Promise<void> => {
+  if (!db) return;
+  try {
+    await updateDoc(doc(db, COLLECTION_NAME, id), { finalRoom: finalRoom });
+  } catch (error) {
+    console.error("Error updating final room:", error);
+    throw error;
+  }
+};
+
+/**
+ * Bulk update final rooms for multiple students
+ * This is used when importing final assignments via Excel
+ */
+export const bulkUpdateFinalRooms = async (updates: { id: string, finalRoom: string }[]): Promise<void> => {
+  if (!db) return;
+  try {
+      // In a real app we might use a Batch, but for simplicity/safety in loops:
+      const promises = updates.map(u => updateDoc(doc(db, COLLECTION_NAME, u.id), { finalRoom: u.finalRoom }));
+      await Promise.all(promises);
+      console.log(`Bulk updated ${updates.length} students`);
+  } catch (error) {
+      console.error("Bulk update failed:", error);
+      throw error;
+  }
+};
+
+/**
  * Clear all data (Dangerous!)
  */
 export const clearDatabase = async (): Promise<void> => {

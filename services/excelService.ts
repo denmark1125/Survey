@@ -4,7 +4,7 @@ import { OfficialStudent, StudentProfile, RoomGroup } from '../types';
 
 /**
  * Parses an uploaded Excel file to extract the student roster.
- * Looks for columns: "姓名", "性別", "房號".
+ * Looks for columns: "姓名", "性別", "房號", "最終確認房號".
  */
 export const parseRosterFile = async (file: File): Promise<OfficialStudent[]> => {
   return new Promise((resolve, reject) => {
@@ -27,7 +27,8 @@ export const parseRosterFile = async (file: File): Promise<OfficialStudent[]> =>
 
           const nameKey = getKey(['姓名', 'Name', '學生姓名']);
           const genderKey = getKey(['性別', 'Gender', 'Sex', '生理性別']);
-          const roomKey = getKey(['房號', 'Room', '原寢室', '寢室']);
+          const roomKey = getKey(['原房號', '原寢室', '房號', 'Room']);
+          const finalRoomKey = getKey(['最終確認房號', '分配寢室', 'Final Room', 'New Room']);
 
           // Helper to strictly clean strings (remove ALL spaces, including invisible ones)
           const cleanStr = (val: any) => (val || '').toString().replace(/\s+/g, '').trim();
@@ -36,7 +37,8 @@ export const parseRosterFile = async (file: File): Promise<OfficialStudent[]> =>
           return {
             name: cleanName(nameKey ? row[nameKey] : ''), 
             gender: cleanStr(genderKey ? row[genderKey] : ''),
-            originalRoom: cleanStr(roomKey ? row[roomKey] : ''),
+            originalRoom: cleanStr(roomKey ? row[roomKey] : ''), // Force string
+            finalRoom: cleanStr(finalRoomKey ? row[finalRoomKey] : '')
           };
         }).filter(s => s.name.length > 0); // Filter out empty rows
 
@@ -88,7 +90,8 @@ export const exportDashboardToExcel = (students: StudentProfile[], groups: RoomG
   const overviewData = students.map(s => ({
     "姓名": s.name,
     "性別": s.gender || '-',
-    "房號": s.originalRoom || '-',
+    "原房號": s.originalRoom || '-',
+    "最終確認房號": s.finalRoom || '-',
     "測驗結果": s.animalName,
     "指定室友": s.preferredRoommates ? s.preferredRoommates.join(", ") : '',
     "作息(睡覺)": s.habits.sleepTime,
@@ -102,7 +105,8 @@ export const exportDashboardToExcel = (students: StudentProfile[], groups: RoomG
       overviewData.push({
           "姓名": name,
           "性別": "-",
-          "房號": "-",
+          "原房號": "-",
+          "最終確認房號": "-",
           "測驗結果": "尚未測驗",
           "指定室友": "-",
           "作息(睡覺)": "-",
@@ -126,6 +130,7 @@ export const exportDashboardToExcel = (students: StudentProfile[], groups: RoomG
                   "姓名": s.name,
                   "性別": s.gender || '-',
                   "原房號": s.originalRoom || '-',
+                  "最終確認房號": s.finalRoom || '-',
                   "動物人格": s.animalName,
                   "契合度": `${g.compatibilityScore}%`,
                   "分組理由": g.reason,

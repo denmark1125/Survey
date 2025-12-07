@@ -3,12 +3,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Login from './Login';
 import StudentDetailModal from './StudentDetailModal';
 import { generateRoomGroups, generateMockStudents } from '../services/geminiService';
-import { groupStudentsLocally } from '../services/localGroupingService';
-import { fetchClassroomData, clearDatabase, deleteStudent, updateStudentName, updateStudentGender, saveOfficialRoster, fetchOfficialRoster } from '../services/dbService';
+import { groupStudentsLocally, validateFinalGroups } from '../services/localGroupingService';
+import { fetchClassroomData, clearDatabase, deleteStudent, updateStudentName, updateStudentGender, saveOfficialRoster, fetchOfficialRoster, updateStudentFinalRoom, bulkUpdateFinalRooms } from '../services/dbService';
 import { parseRosterFile, exportDashboardToExcel, downloadRosterTemplate } from '../services/excelService';
 import { StudentProfile, RoomGroup, AnimalType, OfficialStudent } from '../types';
 import { ANIMAL_DETAILS } from '../constants';
-import { Users, Wand2, CloudDownload, Trash2, AlertTriangle, CheckCircle2, LogOut, Clock, Ghost, BarChart3, Moon, Sun, Home, UserCheck, Sparkles, Zap, Upload, FileSpreadsheet, UserX, AlertCircle, Download, XCircle, HeartPulse, Pencil } from 'lucide-react';
+import { Users, Wand2, CloudDownload, Trash2, AlertTriangle, CheckCircle2, LogOut, Clock, Ghost, BarChart3, Moon, Sun, Home, UserCheck, Sparkles, Zap, Upload, FileSpreadsheet, UserX, AlertCircle, Download, XCircle, HeartPulse, Pencil, Key, FileInput } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -19,6 +19,7 @@ const Dashboard: React.FC = () => {
   const [officialRoster, setOfficialRoster] = useState<OfficialStudent[]>([]);
   const [rosterUpdatedAt, setRosterUpdatedAt] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const finalRoomInputRef = useRef<HTMLInputElement>(null);
 
   // Status states
   const [isSyncing, setIsSyncing] = useState(false);
@@ -117,7 +118,7 @@ const Dashboard: React.FC = () => {
   };
 
   const handleAnalyzeLocal = () => {
-      if (students.length < 3) {
+      if (students.length < 2) { // Allow smaller groups for testing
         alert("學生人數不足，無法分組");
         return;
       }
@@ -136,7 +137,7 @@ const Dashboard: React.FC = () => {
           
           return {
               ...s,
-              originalRoom: rosterInfo?.originalRoom || s.originalRoom,
+              originalRoom: rosterInfo?.originalRoom ? String(rosterInfo.originalRoom) : s.originalRoom,
               // PRIORITY: Roster > DB (unless Unknown)
               // If roster has valid gender, use it. Otherwise fall back to DB.
               gender: rosterInfo?.gender || s.gender || "Unknown"
@@ -156,6 +157,21 @@ const Dashboard: React.FC = () => {
       }, 600);
   };
 
+  const handleValidateFinal = () => {
+      if (students.length < 2) return;
+      setIsGrouping(true);
+      setTimeout(() => {
+          try {
+              const result = validateFinalGroups(students);
+              setGroups(result);
+          } catch(e) {
+              alert("驗證失敗");
+          } finally {
+              setIsGrouping(false);
+          }
+      }, 300);
+  };
+
   const handleAnalyzeAI = async () => {
     if (students.length < 3) {
       alert("學生人數不足，無法分組");
@@ -163,7 +179,21 @@ const Dashboard: React.FC = () => {
     }
     setIsGrouping(true);
     try {
-      const result = await generateRoomGroups(students);
+      // Merge Roster Data similar to Local Grouping for AI
+      const normalize = (n: string) => n.replace(/\s+/g, '').toLowerCase();
+      const enhancedStudents = students.map(s => {
+          const normalizedStudentName = normalize(s.name);
+          const rosterInfo = officialRoster.find(r => 
+              normalize(r.name) === normalizedStudentName
+          );
+          return {
+              ...s,
+              originalRoom: rosterInfo?.originalRoom ? String(rosterInfo.originalRoom) : s.originalRoom,
+              gender: rosterInfo?.gender || s.gender || "Unknown"
+          };
+      });
+
+      const result = await generateRoomGroups(enhancedStudents);
       setGroups(result);
     } catch (e) {
       alert("分組分析失敗 (請檢查 API Key 或網路)");
@@ -221,6 +251,20 @@ const Dashboard: React.FC = () => {
       }
   };
 
+  const handleEditFinalRoom = async (e: React.MouseEvent, id: string, currentRoom?: string) => {
+      e.stopPropagation();
+      const newRoom = prompt("請輸入最終確認的房號 (例如 101):", currentRoom || '');
+      
+      if (newRoom !== null && newRoom !== currentRoom) {
+          try {
+              await updateStudentFinalRoom(id, newRoom.trim());
+              setStudents(prev => prev.map(s => s.id === id ? { ...s, finalRoom: newRoom.trim() } : s));
+          } catch (error) {
+              alert("更新失敗");
+          }
+      }
+  };
+
   const handleGenderToggle = async (e: React.MouseEvent, id: string, currentGender: string) => {
       e.stopPropagation();
       
@@ -272,6 +316,48 @@ const Dashboard: React.FC = () => {
       }
       // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleFinalRoomUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      try {
+          setIsSyncing(true);
+          const roster = await parseRosterFile(file);
+          
+          // Match roster data to existing students and prepare bulk update
+          const updates: {id: string, finalRoom: string}[] = [];
+          const normalize = (n: string) => n.replace(/\s+/g, '').toLowerCase();
+
+          roster.forEach(r => {
+              if (r.finalRoom) {
+                  const student = students.find(s => normalize(s.name) === normalize(r.name));
+                  if (student) {
+                      updates.push({ id: student.id, finalRoom: r.finalRoom.toString() });
+                  }
+              }
+          });
+
+          if (updates.length > 0) {
+              await bulkUpdateFinalRooms(updates);
+              // Refresh local state
+              setStudents(prev => prev.map(s => {
+                  const update = updates.find(u => u.id === s.id);
+                  return update ? { ...s, finalRoom: update.finalRoom } : s;
+              }));
+              alert(`成功匯入並更新 ${updates.length} 筆最終房號！`);
+          } else {
+              alert("未找到可匹配的學生或 Excel 中沒有最終房號欄位");
+          }
+
+      } catch (error) {
+          alert("匯入失敗");
+          console.error(error);
+      } finally {
+          setIsSyncing(false);
+          if (finalRoomInputRef.current) finalRoomInputRef.current.value = '';
+      }
   };
 
   const handleExportExcel = () => {
@@ -589,16 +675,31 @@ const Dashboard: React.FC = () => {
                                 </div>
                             </div>
                             <div className="text-[10px] text-gray-400 font-medium flex items-center gap-1 truncate">
+                                {/* Final Room Badge if Set */}
+                                {s.finalRoom && (
+                                    <span className="bg-purple-100 text-purple-600 px-1.5 rounded mr-1">
+                                        定:{s.finalRoom}
+                                    </span>
+                                )}
                                 <span className="bg-gray-100 px-1.5 rounded">{s.animalName}</span>
                                 {s.originalRoom && <span className="text-gray-300">| 原:{s.originalRoom}</span>}
                             </div>
                         </div>
                     </button>
 
+                    {/* Final Room Edit Button */}
+                    <button
+                        onClick={(e) => handleEditFinalRoom(e, s.id, s.finalRoom)}
+                        className="ml-1 p-2 text-gray-300 hover:text-purple-500 hover:bg-purple-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
+                        title="設定最終房號"
+                    >
+                        <Key size={16} />
+                    </button>
+
                     {/* Edit Name Button */}
                     <button
                         onClick={(e) => handleEditName(e, s.id, s.name)}
-                        className="ml-2 p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
+                        className="ml-1 p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
                         title="修改姓名 (除錯用)"
                     >
                         <Pencil size={16} />
@@ -627,7 +728,45 @@ const Dashboard: React.FC = () => {
                         <Wand2 size={20} className="text-purple-400"/> 智慧分房結果
                     </h2>
                     
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 items-center flex-wrap justify-end">
+                        {/* Import Final Room */}
+                        <div className="relative">
+                            <input 
+                                type="file" 
+                                ref={finalRoomInputRef}
+                                onChange={handleFinalRoomUpload}
+                                accept=".xlsx, .xls"
+                                className="hidden"
+                            />
+                            <button 
+                                onClick={() => finalRoomInputRef.current?.click()}
+                                className="px-3 py-2.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-full font-bold transition-all text-xs flex items-center gap-1"
+                                title="匯入Excel檔更新最終房號"
+                            >
+                                <Upload size={14} /> 匯入最終房號
+                            </button>
+                        </div>
+
+                        {/* Validate Final Grouping */}
+                        <button 
+                            onClick={handleValidateFinal}
+                            disabled={students.length === 0 || isGrouping}
+                            className="px-4 py-2.5 bg-purple-100 text-purple-600 hover:bg-purple-200 rounded-full font-bold transition-all text-xs flex items-center gap-2"
+                            title="依據已輸入的『最終房號』進行衝突檢測"
+                        >
+                            <BarChart3 size={16} /> 驗證最終編排
+                        </button>
+
+                        {/* AI Analysis Button (Restored) */}
+                        <button 
+                            onClick={handleAnalyzeAI}
+                            disabled={students.length === 0 || isGrouping}
+                            className="px-4 py-2.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-full font-bold transition-all text-xs flex items-center gap-2 border border-indigo-100"
+                            title="使用 Google Gemini AI 進行深度分析 (需設定 API Key)"
+                        >
+                            <Sparkles size={14} /> AI 分析
+                        </button>
+
                         {/* Primary Local Grouping Button */}
                         <button 
                             onClick={handleAnalyzeLocal}
@@ -635,17 +774,7 @@ const Dashboard: React.FC = () => {
                             className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white rounded-full font-bold shadow-lg shadow-emerald-200 transition-all active:scale-95 disabled:opacity-50 disabled:shadow-none text-sm flex items-center gap-2"
                             title="依照性別、作息與整潔度自動分組"
                         >
-                            <Zap size={16} fill="currentColor"/> {isGrouping ? '運算中...' : '快速分組 (本地運算)'}
-                        </button>
-                        
-                        {/* Secondary AI Button */}
-                        <button 
-                            onClick={handleAnalyzeAI}
-                            disabled={students.length === 0 || isGrouping}
-                            className="px-4 py-2.5 bg-white border border-gray-200 text-gray-500 hover:bg-gray-50 rounded-full font-bold transition-all text-xs"
-                            title="使用 Gemini AI 進行進階分組 (需 API Key)"
-                        >
-                            AI 進階分組
+                            <Zap size={16} fill="currentColor"/> {isGrouping ? '運算中...' : '快速分組'}
                         </button>
                     </div>
                 </div>

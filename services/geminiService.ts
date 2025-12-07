@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AnimalType, QuizAnswer, StudentProfile, RoomGroup } from "../types";
 import { ANIMAL_DETAILS } from "../constants";
@@ -171,6 +172,7 @@ export const generateRoomGroups = async (students: StudentProfile[]): Promise<Ro
   const rosterData = students.map(s => ({
     id: s.id,
     name: s.name,
+    gender: s.gender,
     animal: s.animalName,
     preferredRoommates: s.preferredRoommates,
     traits: s.traits, 
@@ -178,21 +180,22 @@ export const generateRoomGroups = async (students: StudentProfile[]): Promise<Ro
   }));
 
   const prompt = `
-    You are an expert dormitory coordinator. 
-    I have ${students.length} students. 
-    Group them into optimal rooms of 3 to 4 people (prioritize 4).
+    你是一位專業的大學宿舍分配協調員。
+    我有 ${students.length} 位學生。
+    請將他們分配到最合適的寢室，每間房 3 到 4 人（優先以 4 人一間為主）。
     
-    Rules for grouping:
-    1. **CRITICAL**: Check 'preferredRoommates'. If Student A wants Student B, put them in the same room if possible.
-    2. Sleep schedules MUST match (Early birds with Early birds). This is the most critical physiological factor.
-    3. Cleanliness levels should be similar.
-    4. Social energy should be compatible (e.g. don't put one quiet person with 3 loud party animals).
-    5. Use the "traits" to find common ground.
+    分組規則：
+    1. **關鍵**：檢查 'preferredRoommates' (指定室友)。如果 A 想跟 B 住，請務必將他們安排在同一間。
+    2. 作息時間 (Sleep schedules) 必須一致（早睡配早睡，熬夜配熬夜）。這是最重要的生理指標。
+    3. 整潔度 (Cleanliness) 應該要相近。
+    4. 社交能量 (Social energy) 應該要相容（例如：不要把一個極度內向的人跟三個喜歡開派對的人放在一起）。
+    5. **嚴格禁止**男女混宿 (Check 'gender' field)。男生跟男生住，女生跟女生住。
     
-    Roster:
+    請回傳 JSON 格式。
+    **重要：回傳結果中的所有文字描述 (reason, potentialConflicts) 必須完全使用「繁體中文」 (Traditional Chinese) 撰寫。**
+    
+    學生名單：
     ${JSON.stringify(rosterData)}
-    
-    Return a JSON object containing the groups.
   `;
 
   try {
