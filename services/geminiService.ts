@@ -80,7 +80,7 @@ export const analyzeStudentProfile = async (name: string, answers: QuizAnswer[])
     if (cleanScore >= 5 && sharing === 1) {
       type = AnimalType.CAT;
       traits.push("極度愛乾淨", "重視隱私");
-    } else if (socialScore >= 7) {
+    } else if (socialScore >= 5) { // Updated from 7 to 5 based on user feedback
       type = AnimalType.PUPPY;
       traits.push("社交小能手", "害怕孤單");
     } else if (cleanliness === 3 && sharing >= 2) { // Messy but shares
@@ -221,6 +221,94 @@ export const generateRoomGroups = async (students: StudentProfile[]): Promise<Ro
     console.error("Error grouping students:", error);
     throw error;
   }
+};
+
+/**
+ * NEW: Analyzes EXISTING room groups (e.g. from Manual Final Assignment) using AI.
+ */
+export const analyzeExistingGroups = async (groups: RoomGroup[]): Promise<RoomGroup[]> => {
+    if (!process.env.API_KEY) {
+        throw new Error("請先設定 Google Gemini API Key");
+    }
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+    // We only need Gemini to fill in 'compatibilityScore', 'reason', and 'potentialConflicts'
+    // The grouping is already done.
+    
+    const analysisSchema: Schema = {
+        type: Type.OBJECT,
+        properties: {
+            analyzedGroups: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        roomId: { type: Type.STRING },
+                        compatibilityScore: { type: Type.NUMBER },
+                        reason: { type: Type.STRING },
+                        potentialConflicts: { type: Type.STRING }
+                    },
+                    required: ["roomId", "compatibilityScore", "reason", "potentialConflicts"]
+                }
+            }
+        },
+        required: ["analyzedGroups"]
+    };
+
+    const roomsData = groups.map(g => ({
+        roomId: g.roomId,
+        students: g.students.map(s => ({
+            name: s.name,
+            gender: s.gender,
+            animal: s.animalName,
+            habits: s.habits,
+            preferred: s.preferredRoommates
+        }))
+    }));
+
+    const prompt = `
+        我已經手動將學生分好房間了。請你幫我針對每一間房進行「健康檢查」。
+        請依據學生的生活習慣數據，計算他們的契合度分數 (0-100)，並用繁體中文給出分析評語。
+        
+        重點觀察：
+        1. 睡眠時間是否衝突？
+        2. 是否有人際關係問題（如指定室友未同房，或互斥）？
+        3. 性別是否混宿（若有請標註嚴重警告）？
+        
+        房客資料：
+        ${JSON.stringify(roomsData)}
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash", 
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: analysisSchema,
+            },
+        });
+
+        const result = JSON.parse(response.text);
+        
+        // Merge AI analysis back into original groups
+        return groups.map(g => {
+            const analysis = result.analyzedGroups.find((ag: any) => ag.roomId === g.roomId);
+            if (analysis) {
+                return {
+                    ...g,
+                    compatibilityScore: analysis.compatibilityScore,
+                    reason: analysis.reason,
+                    potentialConflicts: analysis.potentialConflicts
+                };
+            }
+            return g;
+        });
+
+    } catch (error) {
+        console.error("AI Analysis failed:", error);
+        throw error;
+    }
 };
 
 /**

@@ -2,13 +2,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Login from './Login';
 import StudentDetailModal from './StudentDetailModal';
-import { generateRoomGroups, generateMockStudents } from '../services/geminiService';
+import { generateRoomGroups, generateMockStudents, analyzeExistingGroups } from '../services/geminiService';
 import { groupStudentsLocally, validateFinalGroups } from '../services/localGroupingService';
 import { fetchClassroomData, clearDatabase, deleteStudent, updateStudentName, updateStudentGender, saveOfficialRoster, fetchOfficialRoster, updateStudentFinalRoom, bulkUpdateFinalRooms } from '../services/dbService';
 import { parseRosterFile, exportDashboardToExcel, downloadRosterTemplate } from '../services/excelService';
 import { StudentProfile, RoomGroup, AnimalType, OfficialStudent } from '../types';
 import { ANIMAL_DETAILS } from '../constants';
-import { Users, Wand2, CloudDownload, Trash2, AlertTriangle, CheckCircle2, LogOut, Clock, Ghost, BarChart3, Moon, Sun, Home, UserCheck, Sparkles, Zap, Upload, FileSpreadsheet, UserX, AlertCircle, Download, XCircle, HeartPulse, Pencil, Key, FileInput } from 'lucide-react';
+import { Users, Wand2, CloudDownload, Trash2, AlertTriangle, CheckCircle2, LogOut, Clock, Ghost, BarChart3, Moon, Sun, Home, UserCheck, Sparkles, Zap, Upload, FileSpreadsheet, UserX, AlertCircle, Download, XCircle, HeartPulse, Pencil, Key, FileInput, Camera } from 'lucide-react';
+import html2canvas from 'html2canvas';
 
 const Dashboard: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -20,6 +21,7 @@ const Dashboard: React.FC = () => {
   const [rosterUpdatedAt, setRosterUpdatedAt] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const finalRoomInputRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   // Status states
   const [isSyncing, setIsSyncing] = useState(false);
@@ -118,16 +120,15 @@ const Dashboard: React.FC = () => {
   };
 
   const handleAnalyzeLocal = () => {
-      if (students.length < 2) { // Allow smaller groups for testing
+      if (students.length < 2) { 
         alert("學生人數不足，無法分組");
         return;
       }
       setIsGrouping(true);
 
-      // Helper to clean strings (Remove ALL spaces)
       const normalize = (n: string) => n.replace(/\s+/g, '').toLowerCase();
 
-      // Pre-processing: Merge originalRoom AND GENDER from officialRoster if available
+      // Pre-processing: Merge originalRoom AND GENDER from officialRoster
       const enhancedStudents = students.map(s => {
           const normalizedStudentName = normalize(s.name);
           
@@ -138,8 +139,6 @@ const Dashboard: React.FC = () => {
           return {
               ...s,
               originalRoom: rosterInfo?.originalRoom ? String(rosterInfo.originalRoom) : s.originalRoom,
-              // PRIORITY: Roster > DB (unless Unknown)
-              // If roster has valid gender, use it. Otherwise fall back to DB.
               gender: rosterInfo?.gender || s.gender || "Unknown"
           };
       });
@@ -172,6 +171,27 @@ const Dashboard: React.FC = () => {
       }, 300);
   };
 
+  const handleValidateFinalAI = async () => {
+      if (students.length < 2) return;
+      setIsGrouping(true);
+      try {
+          // 1. Group locally by room ID first
+          const localGroups = validateFinalGroups(students);
+          if (localGroups.length === 0) {
+              alert("無最終房號資料");
+              return;
+          }
+          // 2. Send to Gemini for qualitative analysis
+          const analyzedGroups = await analyzeExistingGroups(localGroups);
+          setGroups(analyzedGroups);
+      } catch (e) {
+          alert("AI 驗證失敗");
+          console.error(e);
+      } finally {
+          setIsGrouping(false);
+      }
+  };
+
   const handleAnalyzeAI = async () => {
     if (students.length < 3) {
       alert("學生人數不足，無法分組");
@@ -179,7 +199,6 @@ const Dashboard: React.FC = () => {
     }
     setIsGrouping(true);
     try {
-      // Merge Roster Data similar to Local Grouping for AI
       const normalize = (n: string) => n.replace(/\s+/g, '').toLowerCase();
       const enhancedStudents = students.map(s => {
           const normalizedStudentName = normalize(s.name);
@@ -202,6 +221,22 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleDownloadResultsImage = async () => {
+      if (!resultsRef.current) return;
+      try {
+          const canvas = await html2canvas(resultsRef.current, {
+              scale: 2, // High res
+              backgroundColor: '#ffffff'
+          });
+          const link = document.createElement('a');
+          link.download = `GroupingResults_${new Date().toISOString().slice(0,10)}.jpg`;
+          link.href = canvas.toDataURL('image/jpeg', 0.9);
+          link.click();
+      } catch (e) {
+          alert("截圖失敗");
+      }
+  };
+
   const handleClearAll = async () => {
     if (confirm("【危險】這將會永久刪除雲端資料庫中的所有學生資料！確定要執行嗎？")) {
         if (confirm("再次確認：您真的要清空資料庫嗎？")) {
@@ -221,11 +256,10 @@ const Dashboard: React.FC = () => {
   };
 
   const handleSingleDelete = async (e: React.MouseEvent, id: string, name: string) => {
-      e.stopPropagation(); // Stop clicking row from opening detail modal
+      e.stopPropagation(); 
       if (confirm(`確定要刪除「${name}」的資料嗎？\n此動作無法復原。`)) {
           try {
               await deleteStudent(id);
-              // Update local state directly for speed
               setStudents(prev => prev.filter(s => s.id !== id));
           } catch (error) {
               alert("刪除失敗，請檢查網路");
@@ -242,11 +276,9 @@ const Dashboard: React.FC = () => {
           const cleanName = newName.replace(/\s+/g, ''); // Remove all spaces
           try {
               await updateStudentName(id, cleanName);
-              // Update local state
               setStudents(prev => prev.map(s => s.id === id ? { ...s, name: cleanName } : s));
           } catch (error) {
               alert("更新失敗，請檢查網路");
-              console.error(error);
           }
       }
   };
@@ -268,11 +300,9 @@ const Dashboard: React.FC = () => {
   const handleGenderToggle = async (e: React.MouseEvent, id: string, currentGender: string) => {
       e.stopPropagation();
       
-      // Determine next state: M -> F -> Unknown -> M
       let nextGender = 'M';
       let g = (currentGender || '').trim().toUpperCase();
       
-      // Robust normalization before switching
       if (['M', 'MALE', 'BOY', '男'].includes(g)) g = 'M';
       else if (['F', 'FEMALE', 'GIRL', '女'].includes(g)) g = 'F';
       else g = 'Unknown';
@@ -283,7 +313,6 @@ const Dashboard: React.FC = () => {
 
       try {
           await updateStudentGender(id, nextGender);
-          // Update local state immediately
           setStudents(prev => prev.map(s => s.id === id ? { ...s, gender: nextGender } : s));
       } catch (error) {
           console.error(error);
@@ -297,14 +326,12 @@ const Dashboard: React.FC = () => {
       if (!file) return;
       
       try {
-          setIsSyncing(true); // Show loading
+          setIsSyncing(true); 
           const roster = await parseRosterFile(file);
           
-          // SAVE TO CLOUD IMMEDIATELY (Overwrite old)
           await saveOfficialRoster(roster);
           
           setOfficialRoster(roster);
-          // Update the "Last Updated" display immediately
           setRosterUpdatedAt(new Date().toLocaleString('zh-TW', { hour12: false }));
           
           alert(`成功匯入 ${roster.length} 筆名單資料並同步至雲端 (已覆蓋舊資料)`);
@@ -314,7 +341,6 @@ const Dashboard: React.FC = () => {
       } finally {
           setIsSyncing(false);
       }
-      // Reset input
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -326,7 +352,6 @@ const Dashboard: React.FC = () => {
           setIsSyncing(true);
           const roster = await parseRosterFile(file);
           
-          // Match roster data to existing students and prepare bulk update
           const updates: {id: string, finalRoom: string}[] = [];
           const normalize = (n: string) => n.replace(/\s+/g, '').toLowerCase();
 
@@ -341,7 +366,6 @@ const Dashboard: React.FC = () => {
 
           if (updates.length > 0) {
               await bulkUpdateFinalRooms(updates);
-              // Refresh local state
               setStudents(prev => prev.map(s => {
                   const update = updates.find(u => u.id === s.id);
                   return update ? { ...s, finalRoom: update.finalRoom } : s;
@@ -365,7 +389,6 @@ const Dashboard: React.FC = () => {
       exportDashboardToExcel(students, groups, missingNames);
   };
 
-  // 1. Auto-sync Data from Cloud when logged in
   useEffect(() => {
     if (isLoggedIn) {
         handleSync();
@@ -380,7 +403,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 font-sans">
-      {/* Detail Modal */}
       {selectedStudent && (
         <StudentDetailModal 
             student={selectedStudent} 
@@ -408,7 +430,6 @@ const Dashboard: React.FC = () => {
             </div>
             
             <div className="flex flex-wrap gap-3">
-                {/* Cloud Sync */}
                 <button 
                     onClick={handleSync}
                     disabled={isSyncing}
@@ -444,7 +465,6 @@ const Dashboard: React.FC = () => {
         {/* --- EXCEL MANAGEMENT BAR --- */}
         <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
              <div className="flex items-center gap-4 w-full md:w-auto flex-wrap">
-                 {/* Upload */}
                  <div className="flex flex-col gap-1">
                     <div className="flex gap-2 items-center">
                         <div className="relative">
@@ -462,7 +482,6 @@ const Dashboard: React.FC = () => {
                                 <Upload size={18} /> 上傳名單 (Excel)
                             </button>
                         </div>
-                        {/* Template Download */}
                         <button 
                             onClick={downloadRosterTemplate}
                             className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-200 transition-colors"
@@ -471,7 +490,6 @@ const Dashboard: React.FC = () => {
                             <Download size={18} />
                         </button>
                     </div>
-                    {/* Timestamp Display */}
                     {rosterUpdatedAt && (
                         <div className="text-[10px] text-gray-400 pl-1">
                             📅 名單更新於: {rosterUpdatedAt}
@@ -479,7 +497,6 @@ const Dashboard: React.FC = () => {
                     )}
                  </div>
 
-                 {/* Progress Info - Persists from Cloud */}
                  {officialRoster.length > 0 && (
                      <div className="flex flex-col animate-in fade-in slide-in-from-right-4">
                          <div className="flex items-center gap-2 text-sm font-bold text-gray-600">
@@ -504,7 +521,6 @@ const Dashboard: React.FC = () => {
                  )}
              </div>
 
-             {/* Export */}
              <button 
                  onClick={handleExportExcel}
                  className="w-full md:w-auto px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-100"
@@ -549,14 +565,13 @@ const Dashboard: React.FC = () => {
       {/* Main Content Grid */}
       <div className="grid lg:grid-cols-12 gap-8">
         
-        {/* Left Col: Roster List (4 cols) */}
+        {/* Left Col: Roster List */}
         <div className="lg:col-span-4 flex flex-col gap-4">
           <div className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-[70vh]">
             <div className="p-4 border-b border-gray-100 bg-gray-50/50 backdrop-blur-sm">
               <h2 className="font-bold text-gray-700 flex items-center gap-2 mb-3">
                 <Users size={18} className="text-gray-400" /> 學生名單
               </h2>
-              {/* Filter Tabs */}
               <div className="flex bg-gray-200/50 p-1 rounded-xl">
                   {['ALL', 'DESIGNATED', 'STAY', 'MISSING'].map(tab => (
                       <button
@@ -577,7 +592,6 @@ const Dashboard: React.FC = () => {
                     <p className="text-sm">正在從雲端讀取...</p>
                  </div>
               ) : filterTab === 'MISSING' ? (
-                // --- MISSING STUDENTS LIST ---
                 missingStudents.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-gray-400 p-8 text-center opacity-60">
                         <CheckCircle2 size={48} className="mb-4 text-emerald-200" />
@@ -597,42 +611,27 @@ const Dashboard: React.FC = () => {
                                 <UserX size={16} className="text-red-300" />
                             </div>
                         ))}
-                        <div className="text-center text-xs text-red-400 pt-2">
-                            共 {missingStudents.length} 位學生尚未測驗
-                        </div>
                     </div>
                 )
               ) : filteredStudents.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-gray-400 p-8 text-center opacity-60">
                   <Ghost size={48} className="mb-4 text-gray-200" />
                   <p className="font-bold">沒有符合的資料</p>
-                  {students.length === 0 && (
-                      <button onClick={handleGenerateMock} className="mt-4 text-xs bg-gray-100 px-3 py-2 rounded-lg hover:bg-gray-200 text-gray-600">
-                          生成測試資料看看?
-                      </button>
-                  )}
                 </div>
               ) : (
                 filteredStudents.map((s) => {
-                  // Re-calculate enhanced data locally for display consistency if needed
                   const normalizedName = s.name.replace(/\s+/g, '').toLowerCase();
                   const rosterMatch = officialRoster.find(r => r.name.replace(/\s+/g, '').toLowerCase() === normalizedName);
-                  // Prefer Roster gender, then DB gender. 
                   const rosterG = rosterMatch?.gender;
                   let displayGender = s.gender || "Unknown";
-                  
-                  // Heuristic: If roster has valid gender, use it. Else use DB.
                   if (rosterG && (rosterG.toLowerCase().startsWith('m') || rosterG.toLowerCase().startsWith('f') || rosterG.includes('男') || rosterG.includes('女'))) {
                       displayGender = rosterG;
                   }
-
-                  // Normalize for display
                   let displayGenderNormalized = (displayGender || '').trim().toUpperCase();
                   if (['M', 'MALE', 'BOY', '男'].includes(displayGenderNormalized)) displayGenderNormalized = 'M';
                   else if (['F', 'FEMALE', 'GIRL', '女'].includes(displayGenderNormalized)) displayGenderNormalized = 'F';
                   else displayGenderNormalized = 'UNKNOWN';
                   
-                  // Gender Badge Color
                   let genderBadgeClass = "bg-gray-200 text-gray-500";
                   if (displayGenderNormalized === 'M') genderBadgeClass = "bg-blue-100 text-blue-600";
                   if (displayGenderNormalized === 'F') genderBadgeClass = "bg-pink-100 text-pink-600";
@@ -643,11 +642,7 @@ const Dashboard: React.FC = () => {
                     key={s.id} 
                     className="w-full flex items-center p-3 rounded-2xl border border-transparent hover:border-blue-200 hover:bg-blue-50 transition-all duration-200 relative group"
                   >
-                    {/* Main content - Click to open modal */}
-                    <button 
-                        onClick={() => setSelectedStudent(s)}
-                        className="flex-grow flex items-center text-left min-w-0"
-                    >
+                    <button onClick={() => setSelectedStudent(s)} className="flex-grow flex items-center text-left min-w-0">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center p-1 mr-3 shadow-sm flex-shrink-0 ${ANIMAL_DETAILS[s.animalType]?.color.replace('text-', 'bg-').replace('100', '50')}`}>
                         {ANIMAL_DETAILS[s.animalType]?.svg}
                         </div>
@@ -657,12 +652,10 @@ const Dashboard: React.FC = () => {
                                     {s.name}
                                 </div>
                                 <div className="flex gap-1 flex-shrink-0 items-center">
-                                     {/* Clickable Gender Badge */}
                                     <div 
                                         role="button"
                                         onClick={(e) => handleGenderToggle(e, s.id, displayGenderNormalized)}
                                         className={`text-[9px] px-2 py-0.5 rounded font-bold cursor-pointer hover:scale-110 transition-transform ${genderBadgeClass}`}
-                                        title="點擊切換性別 (男/女/未知)"
                                     >
                                         {displayGenderNormalized === 'UNKNOWN' ? '?' : displayGenderNormalized === 'M' ? '男' : '女'}
                                     </div>
@@ -675,42 +668,19 @@ const Dashboard: React.FC = () => {
                                 </div>
                             </div>
                             <div className="text-[10px] text-gray-400 font-medium flex items-center gap-1 truncate">
-                                {/* Final Room Badge if Set */}
-                                {s.finalRoom && (
-                                    <span className="bg-purple-100 text-purple-600 px-1.5 rounded mr-1">
-                                        定:{s.finalRoom}
-                                    </span>
-                                )}
+                                {s.finalRoom && <span className="bg-purple-100 text-purple-600 px-1.5 rounded mr-1">定:{s.finalRoom}</span>}
                                 <span className="bg-gray-100 px-1.5 rounded">{s.animalName}</span>
                                 {s.originalRoom && <span className="text-gray-300">| 原:{s.originalRoom}</span>}
                             </div>
                         </div>
                     </button>
-
-                    {/* Final Room Edit Button */}
-                    <button
-                        onClick={(e) => handleEditFinalRoom(e, s.id, s.finalRoom)}
-                        className="ml-1 p-2 text-gray-300 hover:text-purple-500 hover:bg-purple-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
-                        title="設定最終房號"
-                    >
+                    <button onClick={(e) => handleEditFinalRoom(e, s.id, s.finalRoom)} className="ml-1 p-2 text-gray-300 hover:text-purple-500 hover:bg-purple-50 rounded-full transition-all opacity-0 group-hover:opacity-100">
                         <Key size={16} />
                     </button>
-
-                    {/* Edit Name Button */}
-                    <button
-                        onClick={(e) => handleEditName(e, s.id, s.name)}
-                        className="ml-1 p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
-                        title="修改姓名 (除錯用)"
-                    >
+                    <button onClick={(e) => handleEditName(e, s.id, s.name)} className="ml-1 p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-all opacity-0 group-hover:opacity-100">
                         <Pencil size={16} />
                     </button>
-
-                    {/* Delete Button */}
-                    <button
-                        onClick={(e) => handleSingleDelete(e, s.id, s.name)}
-                        className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100"
-                        title="刪除此筆資料"
-                    >
+                    <button onClick={(e) => handleSingleDelete(e, s.id, s.name)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100">
                         <Trash2 size={16} />
                     </button>
                   </div>
@@ -720,7 +690,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Col: Grouping Results (8 cols) */}
+        {/* Right Col: Grouping Results */}
         <div className="lg:col-span-8">
             <div className="bg-white rounded-3xl shadow-sm border border-gray-200 min-h-[70vh] flex flex-col relative overflow-hidden">
                 <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center z-10 relative gap-4">
@@ -729,7 +699,6 @@ const Dashboard: React.FC = () => {
                     </h2>
                     
                     <div className="flex gap-2 items-center flex-wrap justify-end">
-                        {/* Import Final Room */}
                         <div className="relative">
                             <input 
                                 type="file" 
@@ -747,51 +716,67 @@ const Dashboard: React.FC = () => {
                             </button>
                         </div>
 
-                        {/* Validate Final Grouping */}
+                        {/* Validate Final Grouping (Local) */}
                         <button 
                             onClick={handleValidateFinal}
                             disabled={students.length === 0 || isGrouping}
                             className="px-4 py-2.5 bg-purple-100 text-purple-600 hover:bg-purple-200 rounded-full font-bold transition-all text-xs flex items-center gap-2"
-                            title="依據已輸入的『最終房號』進行衝突檢測"
+                            title="檢測衝突 (Local)"
                         >
-                            <BarChart3 size={16} /> 驗證最終編排
+                            <BarChart3 size={16} /> 驗證
+                        </button>
+                        
+                        {/* Validate Final Grouping (AI) */}
+                        <button 
+                            onClick={handleValidateFinalAI}
+                            disabled={students.length === 0 || isGrouping}
+                            className="px-4 py-2.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-full font-bold transition-all text-xs flex items-center gap-2 border border-rose-100"
+                            title="使用 AI 深度分析最終分房"
+                        >
+                            <Sparkles size={14} /> AI 驗證
                         </button>
 
-                        {/* AI Analysis Button (Restored) */}
+                        {/* AI Grouping Button (Restored) */}
                         <button 
                             onClick={handleAnalyzeAI}
                             disabled={students.length === 0 || isGrouping}
                             className="px-4 py-2.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-full font-bold transition-all text-xs flex items-center gap-2 border border-indigo-100"
-                            title="使用 Google Gemini AI 進行深度分析 (需設定 API Key)"
+                            title="AI 自動分組"
                         >
-                            <Sparkles size={14} /> AI 分析
+                            <Zap size={14} /> AI 分組
                         </button>
 
-                        {/* Primary Local Grouping Button */}
                         <button 
                             onClick={handleAnalyzeLocal}
                             disabled={students.length === 0 || isGrouping}
                             className="px-5 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white rounded-full font-bold shadow-lg shadow-emerald-200 transition-all active:scale-95 disabled:opacity-50 disabled:shadow-none text-sm flex items-center gap-2"
-                            title="依照性別、作息與整潔度自動分組"
                         >
-                            <Zap size={16} fill="currentColor"/> {isGrouping ? '運算中...' : '快速分組'}
+                            快速分組
                         </button>
+
+                        {/* Export Image Button */}
+                         {groups.length > 0 && (
+                            <button 
+                                onClick={handleDownloadResultsImage}
+                                className="px-3 py-2.5 bg-gray-800 text-white rounded-full font-bold hover:bg-gray-900 transition-all text-xs flex items-center gap-2"
+                                title="下載結果圖卡"
+                            >
+                                <Camera size={14} />
+                            </button>
+                        )}
                     </div>
                 </div>
 
-                <div className="p-6 bg-gray-50/30 flex-grow overflow-y-auto relative">
+                <div className="p-6 bg-gray-50/30 flex-grow overflow-y-auto relative" ref={resultsRef}>
                     {groups.length === 0 ? (
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
-                            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
-                                <BarChart3 size={40} className="text-gray-300" />
-                            </div>
+                            <BarChart3 size={40} className="text-gray-300 mb-6" />
                             <p className="font-medium">尚未進行分組</p>
-                            <p className="text-sm mt-1 opacity-70 max-w-xs text-center">準備好學生名單(含性別)後，點擊「快速分組」，系統將會依照性別分流並進行最佳配對</p>
                         </div>
                     ) : (
                         <div className="grid md:grid-cols-2 gap-5">
                             {groups.map((group, idx) => (
-                                <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all hover:-translate-y-1">
+                                <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition-all break-inside-avoid">
                                     <div className="flex justify-between items-start mb-4">
                                         <div className="flex items-center gap-2">
                                             <span className={`text-white min-w-[3.5rem] px-2 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${group.roomId.includes('男') ? 'bg-blue-600 shadow-blue-200' : group.roomId.includes('女') ? 'bg-pink-500 shadow-pink-200' : 'bg-gray-500'} shadow-md`}>{group.roomId}</span>
@@ -800,26 +785,17 @@ const Dashboard: React.FC = () => {
                                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-wide ${group.compatibilityScore >= 90 ? 'bg-emerald-100 text-emerald-700' : group.compatibilityScore >= 70 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
                                                 契合度 {group.compatibilityScore}
                                             </span>
-                                            {/* Score Visualization Bar */}
-                                            <div className="w-20 h-1.5 bg-gray-100 rounded-full mt-1 overflow-hidden">
-                                                <div 
-                                                    className={`h-full rounded-full ${group.compatibilityScore >= 90 ? 'bg-emerald-500' : group.compatibilityScore >= 70 ? 'bg-amber-500' : 'bg-red-500'}`} 
-                                                    style={{ width: `${group.compatibilityScore}%` }}
-                                                ></div>
-                                            </div>
                                         </div>
                                     </div>
                                     
-                                    {/* Avatars */}
                                     <div className="flex -space-x-2 mb-4 px-2">
                                         {group.students.map(s => (
-                                            <div key={s.id} className={`w-9 h-9 rounded-full border-2 border-white flex items-center justify-center p-0.5 relative z-0 hover:z-10 hover:scale-125 transition-transform shadow-sm ${ANIMAL_DETAILS[s.animalType]?.color.replace('text-', 'bg-').replace('100', '50')}`} title={s.name}>
+                                            <div key={s.id} className={`w-9 h-9 rounded-full border-2 border-white flex items-center justify-center p-0.5 relative z-0 hover:z-10 hover:scale-125 transition-transform shadow-sm ${ANIMAL_DETAILS[s.animalType]?.color.replace('text-', 'bg-').replace('100', '50')}`}>
                                                 {ANIMAL_DETAILS[s.animalType]?.svg}
                                             </div>
                                         ))}
                                     </div>
                                     
-                                    {/* Names */}
                                     <div className="flex flex-wrap gap-1.5 mb-4">
                                         {group.students.map(s => (
                                             <span key={s.id} className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded">

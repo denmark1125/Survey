@@ -6,7 +6,7 @@ import { calculateCompatibility } from "./matchingService";
  * Groups students locally based on gender, preferences, and compatibility.
  * Features:
  * 1. Strict Gender Partitioning
- * 2. Preserve Existing Rooms (if requested) - NOW PROTECTS SINGLE STUDENTS
+ * 2. Preserve Existing Rooms (if requested) - PROTECTS SINGLE STUDENTS (>=1)
  * 3. Aggressive Mutual Match Magnet (Friends stick together)
  * 4. Habit-based sorting for remainder
  */
@@ -45,6 +45,38 @@ export const groupStudentsLocally = (students: StudentProfile[]): RoomGroup[] =>
           potentialConflicts: "請檢查 Excel 名單或手動編輯性別"
       });
   }
+
+  // --- PHASE 3: GLOBAL AUDIT (Post-Processing) ---
+  // Scan all generated groups for split mutual matches
+  const studentRoomMap = new Map<string, string>();
+  groups.forEach(g => {
+      g.students.forEach(s => studentRoomMap.set(s.name, g.roomId));
+  });
+
+  groups.forEach(group => {
+      const newConflicts: string[] = [];
+      if (group.potentialConflicts) newConflicts.push(group.potentialConflicts);
+
+      group.students.forEach(s => {
+          s.preferredRoommates?.forEach(friendName => {
+              if (['無 (隨緣)', '續住', '不想換宿舍 (續住)'].includes(friendName) || friendName.includes('不')) return;
+
+              // Check if mutual
+              const friendRoomId = studentRoomMap.get(friendName);
+              if (friendRoomId && friendRoomId !== group.roomId) {
+                  // Only warn if mutual
+                  const friend = students.find(fs => fs.name === friendName);
+                  if (friend && hasPreference(friend, s)) {
+                       newConflicts.push(`❌ 與互選對象「${friendName}」被拆散 (位於 ${friendRoomId})`);
+                  }
+              }
+          });
+      });
+      
+      if (newConflicts.length > 0) {
+        group.potentialConflicts = [...new Set(newConflicts)].join("。 ");
+      }
+  });
 
   return groups;
 };
@@ -107,7 +139,6 @@ const processPool = (pool: StudentProfile[], prefix: string, startRoomNum: numbe
     
     remaining.forEach(s => {
         if (s.originalRoom) {
-            // Normalize room name (trim) just in case
             const rName = s.originalRoom.trim();
             if (!roomClusters.has(rName)) {
                 roomClusters.set(rName, []);
@@ -119,29 +150,21 @@ const processPool = (pool: StudentProfile[], prefix: string, startRoomNum: numbe
     const preservedIds = new Set<string>();
 
     roomClusters.forEach((members, roomName) => {
-        // Condition: Has ANYONE wanting to stay?
-        // Logic: If Student A says "Stay", and Student B is "Neutral", keep them together.
-        // Even if only 1 person exists in the quiz data for this room, we preserve it 
-        // to prevent them from being thrown into the random pool.
-        
         const stayers = members.filter(m => {
             const prefs = m.preferredRoommates || [];
             const wantsToStay = prefs.some(p => p.includes('續住') || p.includes('不'));
             const isNeutral = prefs.includes('隨緣') || prefs.length === 0;
-            
-            // Designated someone INSIDE this room? -> Treat as stay
             const designatedInside = prefs.some(p => members.some(roomie => roomie.name === p));
 
             return wantsToStay || isNeutral || designatedInside;
         });
 
-        // CRITICAL FIX: Changed threshold from 2 to 1.
-        // If even ONE person wants to stay (or is neutral in an existing room), we hold the room.
-        // This protects small cohorts (boys) from being split if they are the only ones who took the quiz so far.
+        // CRITICAL: Single Anchor Protection
+        // If >= 1 person wants to stay, we lock the room.
         if (stayers.length >= 1) {
-             const analysis = analyzeGroup(stayers, true, allStudents); // true = isPreserved
+             const analysis = analyzeGroup(stayers, true, allStudents); 
              groups.push({
-                 roomId: roomName, // Keep Original Name!
+                 roomId: roomName, 
                  students: stayers,
                  compatibilityScore: analysis.score,
                  reason: "🏠 " + analysis.reason,
@@ -152,13 +175,12 @@ const processPool = (pool: StudentProfile[], prefix: string, startRoomNum: numbe
         }
     });
 
-    // Remove preserved students from the pool
     remaining = remaining.filter(s => !preservedIds.has(s.id));
 
 
     // --- PHASE 2: NEW GROUPING (SORT + MAGNET) ---
     
-    // Initial Sort: By Sleep Time
+    // Sort remaining by Sleep Time
     const getSleepScore = (s: StudentProfile) => {
         if (s.habits.sleepTime.includes('10:30')) return 1;
         if (s.habits.sleepTime.includes('02:30')) return 3;
@@ -216,7 +238,6 @@ const processPool = (pool: StudentProfile[], prefix: string, startRoomNum: numbe
             }
         }
 
-        // 3. Finalize Room
         const analysis = analyzeGroup(currentRoom, false, allStudents);
         groups.push({
             roomId: `${prefix}-${roomCounter}`,
@@ -235,7 +256,7 @@ const calculateGroupSize = (remainingCount: number): number => {
     if (remainingCount === 5) return 3;
     if (remainingCount === 6) return 3;
     if (remainingCount === 2) return 2;
-    return 4; // Default target
+    return 4; 
 };
 
 const findBestMatchIndex = (currentRoom: StudentProfile[], candidates: StudentProfile[]): number => {
@@ -331,6 +352,5 @@ const analyzeGroup = (students: StudentProfile[], isPreserved: boolean = false, 
 
 const hasPreference = (a: StudentProfile, b: StudentProfile) => {
     if (!a.preferredRoommates || a.preferredRoommates.some(p => p.includes("隨緣"))) return false;
-    // Flexible match: name includes name
     return a.preferredRoommates.some(name => b.name.includes(name) || name.includes(b.name));
 };
